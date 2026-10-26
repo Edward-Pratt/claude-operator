@@ -179,7 +179,8 @@ local function groupHeader(ctx, g, count, selected, hasLive)
     hasLive and ui.glyph({ name = "activity", size = 14, color = "primary" }) or nil,
     ui.button({ text = basename(g.cwd), variant = "ghost", contentAlign = "start", flexGrow = 1, controlSize = "sm",
       fontSize = 13, tooltip = shared.projectPath(g.cwd), selected = selected, onClick = toggle }),
-    kit.muted(`{count} · {shared.ago(g.last)} ago`, 11)
+    -- Minutes at most: this tab does not re-render every second.
+    kit.muted(`{count} · {noctalia.nowMs() - g.last < 60000 and "just now" or shared.ago(g.last) .. " ago"}`, 11)
   ))
 end
 

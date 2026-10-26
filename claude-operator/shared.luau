@@ -227,18 +227,18 @@ function M.paceText(w, p)
     return `Limit in {M.span(p.etaMs)} at this rate ({M.clock(noctalia.nowMs() + p.etaMs)})`, budget
   end
   if not p.projected then return "Too early to project", budget end
-  local how = p.recent and "at the last hour's rate" or "at this rate"
-  return `On course for ~{M.round(math.min(p.projected, 999))}% by reset {how}`, budget
+  local how = p.recent and `at the last {M.span(w.rateSpanMs or 0)}'s rate` or "at this rate"
+  return `On course for ~{M.round(math.min(p.projected, 100))}% by reset {how}`, budget
 end
 
 -- A few words for tight spaces (the Live strip): what happens next.
 function M.paceShort(w, p)
   p = p or M.pace(w)
   if p.status == "idle" then return "not started" end
-  if p.status == "limit" then return `full · resets {M.clock(w.resetsAt)}` end
+  if p.status == "limit" then return w.resetsAt and `full · resets {M.clock(w.resetsAt)}` or "full" end
   if p.status == "hit" or p.status == "soon" then return `full by {M.clock(noctalia.nowMs() + p.etaMs)}` end
   if not p.projected then return `resets in {M.countdown(w.resetsAt)}` end
-  return `~{M.round(math.min(p.projected, 999))}% by reset`
+  return `~{M.round(math.min(p.projected, 100))}% by reset`
 end
 
 -- Red only when it is urgent; a limit days away is a warning, not an alarm.

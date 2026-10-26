@@ -189,7 +189,7 @@ end
 -- is added on every successful fetch; a new resetsAt means a new window, which starts
 -- an empty list. Lookback per window kind, and the shortest span a rate is trusted from.
 local LOOKBACK = { session = HOUR_MS, weekly = DAY_MS }
-local MIN_SPAN = { session = 15 * 60000, weekly = 3 * HOUR_MS }
+local MIN_SPAN = { session = 30 * 60000, weekly = 3 * HOUR_MS }
 
 local function addSample(w, prev, now)
   local same = prev and prev.resetsAt and w.resetsAt and math.abs(prev.resetsAt - w.resetsAt) < 10 * 60000
