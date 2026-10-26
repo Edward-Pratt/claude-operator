@@ -194,11 +194,21 @@ end
 
 function M.quote(s) return "'" .. string.gsub(s, "'", "'\\''") .. "'" end
 
+-- The claude binary. Noctalia's environment often lacks ~/.local/bin, where the native
+-- installer puts it, so look there and in the older ~/.claude/local before giving up.
+function M.claudeBin()
+  if noctalia.commandExists("claude") then return "claude" end
+  for _, p in ipairs({ HOME .. "/.local/bin/claude", HOME .. "/.claude/local/claude" }) do
+    if noctalia.fileExists(p) then return p end
+  end
+  return nil
+end
+
 -- argv running claude (plus args) under the given account.
 function M.claudeArgv(account, ...)
   local argv = {}
   if account and account ~= DEFAULT_DIR then argv = { "env", "CLAUDE_CONFIG_DIR=" .. account } end
-  argv[#argv + 1] = "claude"
+  argv[#argv + 1] = M.claudeBin() or "claude"
   for _, a in ipairs({ ... }) do argv[#argv + 1] = a end
   return argv
 end

@@ -186,7 +186,7 @@ entry = "widget.luau"
 [[panel]]
 id = "panel"
 entry = "panel.luau"
-width = 640
+width = 700
 height = 720
 # Only navigation keys: letters stay with the session browser's filter input.
 capture_keys = ["up", "down", "Return", "KP_Enter"]
