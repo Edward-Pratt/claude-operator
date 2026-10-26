@@ -11,16 +11,20 @@ local M = {}
 local data = { loading = false, error = nil, groups = nil, localSkills = nil }
 local busy = {} -- action key -> true while its `claude plugin` run is in flight
 local confirming = nil -- "plugin:<id>" | "market:<name>" | "local:<name>"
+local progress = nil -- { done, total, text } while Update all runs
 local installText, installRev = "", 0
 local RESTART = "Restart Claude Code to apply."
 
 function M.load(ctx)
-  if data.loading then return end
+  -- A load asked for mid-load (an action just finished) runs once this one is back,
+  -- since this one may have read the list from before the action.
+  if data.loading then data.again = true return end
   if not plugins.available() then data.error = "Claude Code not found (looked on PATH, ~/.local/bin, ~/.npm-global/bin and ~/.bun/bin)" ctx.render() return end
   data.loading, data.error = true, nil
   ctx.render()
   plugins.refresh(function(result, err)
     data.loading, data.error = false, err
+    if data.again then data.again = false; M.load(ctx) return end
     if result then
       -- Claude Code versions differ in what `plugin list --json` returns; a shape this
       -- code does not expect must surface as an error, not leave "Reading plugins…" up.
@@ -36,7 +40,8 @@ function M.load(ctx)
   end)
 end
 
-function M.show(ctx) if not data.groups then M.load(ctx) end end
+-- Reloads on every show; the last list stays up meanwhile.
+function M.show(ctx) M.load(ctx) end
 function M.refresh(ctx) M.load(ctx) end
 function M.busy() return data.loading end
 function M.closed() confirming = nil end
@@ -71,6 +76,26 @@ local function updatable()
     end
   end
   return list
+end
+
+-- Step 0 refreshes the marketplaces; step i updates plugin i, its row spinning.
+local function updateAll(ctx)
+  local list = updatable()
+  local current = nil
+  progress = { done = 0, total = #list + 1, text = "Refreshing marketplaces" }
+  run(ctx, "updateAll", "Update all", function(_, done)
+    plugins.updateAll(list, function(ok, message)
+      if current then busy["update:" .. current] = nil end
+      progress = nil
+      done(ok, message)
+    end, function(i, p)
+      if current then busy["update:" .. current] = nil end
+      current = p.id
+      busy["update:" .. p.id] = true
+      progress.done, progress.text = i, `Updating {p.name}`
+      ctx.render()
+    end)
+  end, nil)
 end
 
 local function ask(ctx, key) return function() confirming = key; ctx.render() end end
@@ -160,9 +185,20 @@ function M.render(ctx)
       ui.button({ glyph = updatingAll and "loader-2" or "circle-arrow-up", text = "Update all", variant = "ghost", controlSize = "sm",
         tooltip = "Refresh every marketplace, then update every user-scope plugin",
         enabled = not updatingAll and not checking and data.groups ~= nil,
-        onClick = function() run(ctx, "updateAll", "Update all", plugins.updateAll, updatable()) end }),
+        onClick = function() updateAll(ctx) end }),
     }),
   }
+  if progress then
+    rows[#rows + 1] = ui.column({ key = "plugins-progress", gap = 4 }, {
+      kit.muted(`{progress.text} · step {progress.done + 1} of {progress.total}`, 11),
+      ui.progress({ progress = progress.done / progress.total, height = 4, radius = 2, fill = "primary", track = "on_surface/0.12" }),
+    })
+  elseif data.loading and data.groups then
+    rows[#rows + 1] = ui.row({ key = "plugins-progress", gap = 6, align = "center" }, {
+      ui.glyph({ name = "loader-2", size = 12, color = "on_surface_variant" }),
+      kit.muted("Refreshing the list…", 11),
+    })
+  end
   if data.error then
     rows[#rows + 1] = ui.label({ text = data.error, color = "error" })
   elseif not data.groups then

@@ -337,9 +337,9 @@ function M.checkUpdates(_, done)
 end
 
 -- Refreshes every marketplace, then updates the given plugins one at a time (parallel
--- runs would race on the same settings and cache). done(ok, summary); ok is false when
--- any plugin failed.
-function M.updateAll(list, done)
+-- runs would race on the same settings and cache). onStep(i, p) fires before plugin i.
+-- done(ok, summary); ok is false when any plugin failed.
+function M.updateAll(list, done, onStep)
     local updated, failed = {}, {}
     local i = 0
     local function nextPlugin()
@@ -352,6 +352,7 @@ function M.updateAll(list, done)
             done(#failed == 0, #parts > 0 and table.concat(parts, " ") or "Every plugin is up to date.")
             return
         end
+        onStep(i, p)
         M.updatePlugin(p, function(ok, _, data)
             if not ok then
                 table.insert(failed, p.name)
