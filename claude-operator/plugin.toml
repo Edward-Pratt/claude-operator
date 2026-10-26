@@ -6,7 +6,7 @@
 
 id = "edward/claude-operator"
 name = "Claude Operator"
-version = "0.1.0"
+version = "0.2.0"
 # 33: revealKey on ui.scroll (session browser keeps the selection in view).
 # 31: noctalia.getColor for the bar's SVG rings. 24: argv process execution.
 # 22: relative luau imports.

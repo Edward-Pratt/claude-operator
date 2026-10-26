@@ -53,7 +53,8 @@ belongs to an account carries `account`, its config dir.
 ```
 accounts  = [{ dir, label, email, default,
                limits = { updated, stale, error, windows = [
-                 { id, label, kind, model, percent, resetsAt, durationMs, severity } ] } }]
+                 { id, label, kind, model, percent, resetsAt, durationMs, severity,
+                   samples = [{ t, percent }], rate, rateSpanMs } ] } }]
 sessions  = [{ pid, account, sessionId, name, cwd, status, waitingFor, since,
                terminal, remote,            -- remote: claude.ai/code URL or nil
                d = { title, mode, branch, model, context, contextMax, tool, todos,
@@ -62,9 +63,10 @@ sessions  = [{ pid, account, sessionId, name, cwd, status, waitingFor, since,
 recent    = [{ account, sessionId, cwd, title, prompt, mtime }]
 elsewhere = [{ account, id, url, title, category, needs, detail, model, context,
                maxContext, mode, branch, since }]
-usage     = { updated, daily = [7], dailyCost = [7], todayTokens, todayCost,
-              weekTokens, weekCost, monthTokens, monthCost, weekMessages,
-              weekSessions, weekModels = { [family] = tokens } }
+usage     = { updated, days = [7 weekday labels, today last], daily = [7], dailyCost = [7],
+              todayTokens, todayCost, d7Tokens, d7Cost, d30Tokens, d30Cost,
+              d7Messages, d7Sessions, d7Models = { [family] = tokens },
+              topSessions = [{ id, cost, tokens, title, cwd }] }   -- rolling, ends today
 pricing   = { updated, rates = { GBP = 0.75, ... } }   -- for currency display
 command   = { action = "refresh", at }                 -- panel -> service
 ```
@@ -73,6 +75,17 @@ command   = { action = "refresh", at }                 -- panel -> service
 
 - **Context** = input + cache read + cache write of the last assistant turn (what fills
   the window). `contextMax` comes from the pricing table per model, default 200k.
+- **Pace is a projection, not a deviation.** The old "N% ahead of pace" compared usage
+  with burning exactly 100% by the reset, so "on pace" meant "you will max out". Now
+  `shared.pace` projects the percent at reset from a burn rate (5-hour window: the last
+  hour, from samples the service keeps per window and drops when `resetsAt` moves;
+  weekly: the average so far, after 6 hours), the time to 100%, and the budget that
+  lasts until the reset. Status: idle, early, ok, tight (85%+ or 100% only just before
+  the reset), hit (100% well before), soon (within 1 h / 1 day), limit. Only soon and
+  limit are red. `shared.paceText`/`paceShort` are the only wording; every surface uses
+  them.
+- **Usage periods** roll: today, 7 days and 30 days ending today, so the chart is never a
+  lone Monday bar and nothing collides with the plan's own weekly reset.
 - **Cost** is priced per full model id, falling back to the newest model of the same
   family, then to nothing (an unknown model adds no cost rather than a wrong one).
 - **Expired token**: keep the last limits, set `stale`, log once per transition. The

@@ -51,11 +51,13 @@ Add **Claude Operator** from the bar's widget picker. It shows:
 - One dot per running session: red needs you, accent is working, grey is idle. After 8
   it shows `+N`. Set **Bar style** to *Counts* for `waiting busy/total` instead.
 - The 5-hour and 7-day plan windows (pick others with **Bar limits**) as rings, bars or
-  plain percentages. A window changes colour when you use it faster than the clock, and red
-  at the limit. Numbers kept from before an expired token are dimmed.
+  plain percentages. A window turns to the warning colour when the current rate takes it
+  past 85% (or to 100% before the reset), and red when the limit is under an hour away
+  (5-hour window) or a day away (weekly), or reached. Numbers kept from before an expired
+  token are dimmed.
 
-Hover it for every session, the plan, each window's reset time and today's and this
-week's cost. Click it to open the panel.
+Hover it for every session, the plan, where each window is heading, and the cost of
+today and the last 7 days. Click it to open the panel.
 
 ### Panel
 
@@ -72,9 +74,13 @@ noctalia msg panel-toggle edward/claude-operator:panel
   the transcript, and stop the session (click twice). *Elsewhere* lists your Remote
   Control sessions on other machines. *Recent* lists closed sessions to resume.
   **New session** starts Claude in a recent project.
-- **Usage**: each plan window with its pace (how far ahead of or behind the clock you
-  are) and reset time, tokens and cost for today, this week and this month, daily
-  activity, and the models used this week.
+- **Usage**: each plan window as one bar: what you have used, where the current rate takes
+  you by the reset, and a tick for how much of the window has passed. Under it: when you
+  would hit the limit at this rate (or roughly where you will end up), the reset time, and
+  the budget per hour or day that would last until the reset. The 5-hour window uses the
+  last hour's rate once there is enough of it; weekly windows use their average so far,
+  after the first 6 hours. Then estimated cost and tokens for today, 7 days and 30 days,
+  the last 7 days day by day, the five costliest sessions and the models used.
 - **Sessions**: every saved session, grouped by project (worktrees read as
   `repo › worktree`). Filter by title, prompt or path, sort by date or name, show only
   empty sessions. Click a session to resume it. Each row can open or create the
