@@ -34,7 +34,7 @@ Claude Operator merges [claude-cockpit](https://github.com/noctalia-dev/communit
   Plugins tab.
 - `bash`, `jq` and `curl`.
 - Standard tools every distribution ships: `find`, `grep`, `sed`, `awk`, `tac`, `stat`,
-  `sort`, `head`, `tail`, `tr`, `xargs`, `date`, `basename`, `dirname`, `readlink`, `cat`,
+  `sort`, `head`, `tail`, `tr`, `cut`, `xargs`, `date`, `basename`, `dirname`, `readlink`, `cat`,
   `mkdir`, `mv`, `rm`, `pgrep`, `kill`.
 - `xdg-open` to open folders, transcripts and claude.ai links.
 - Optional: kitty with remote control, to land on the exact tab of a session and to open
