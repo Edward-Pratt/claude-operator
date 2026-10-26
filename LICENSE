@@ -1,11 +1,9 @@
 MIT License
 
 Copyright (c) 2026 Edward Pratt
-
-Portions are derived from:
-- claude-sessions, Copyright (c) lfdominguez, MIT License
-- claude-cockpit, Copyright (c) nightwatch75, MIT License
-- noctalia-v5-claudecode, Copyright (c) jrohland, MIT License (via claude-cockpit)
+Copyright (c) lfdominguez (claude-sessions, from which portions are derived)
+Copyright (c) nightwatch75 (claude-cockpit, from which portions are derived)
+Copyright (c) jrohland (noctalia-v5-claudecode, via claude-cockpit)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
