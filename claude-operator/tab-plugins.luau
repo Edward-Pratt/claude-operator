@@ -104,19 +104,16 @@ local function cancel(ctx) return function() confirming = nil; ctx.render() end 
 local function linkButton(url)
   if not url then return nil end
   return kit.iconButton(string.match(url, "^https://github%.com/") and "brand-github" or "external-link", url,
-    function() plugins.openUrl(url) end)
+    function() plugins.openUrl(url) end, { enabled = true })
 end
 
--- Shown only with a newer version (or while Update all is on this row). Otherwise an
--- invisible stand-in keeps the row's buttons lined up with the others; opacity is set
--- both ways because the host keeps a prop a later render leaves out.
+-- Shown only with a newer version (or while Update all is on this row), first in the
+-- row so the buttons after it stay lined up with the other rows'.
 local function updateButton(ctx, p)
   local key = "update:" .. p.id
-  if p.newVersion or busy[key] then
-    return kit.iconButton(busy[key] and "loader-2" or "circle-arrow-up", `Update to {p.newVersion or "latest"}`,
-      function() run(ctx, key, p.name, plugins.updatePlugin, p, RESTART) end, { enabled = not busy[key], opacity = 1 })
-  end
-  return kit.iconButton("circle-arrow-up", nil, nil, { enabled = false, opacity = 0 })
+  if not (p.newVersion or busy[key]) then return nil end
+  return kit.iconButton(busy[key] and "loader-2" or "circle-arrow-up", `Update to {p.newVersion or "latest"}`,
+    function() run(ctx, key, p.name, plugins.updatePlugin, p, RESTART) end, { enabled = not busy[key] })
 end
 
 local function pluginRow(ctx, p, rows)
@@ -128,10 +125,10 @@ local function pluginRow(ctx, p, rows)
       ui.label({ text = p.name, fontSize = 13, maxLines = 1 }),
       kit.muted(meta, 10, { color = p.newVersion and "primary" or "on_surface_variant" }),
     }),
+    updateButton(ctx, p),
     linkButton(p.url),
     actionButton("toggle:" .. p.id, p.enabled and "toggle-right" or "toggle-left", p.enabled and "Disable" or "Enable",
       function() run(ctx, "toggle:" .. p.id, p.name, plugins.setEnabled, p, RESTART) end),
-    updateButton(ctx, p),
     actionButton(key, "trash", "Uninstall", ask(ctx, key))
   ))
   if confirming == key then
