@@ -137,7 +137,8 @@ you, a limit about to be hit, or how many lines are working.
 
 - **Plugins**: installed Claude Code plugins by marketplace, plus bare skill folders in
   `~/.claude/skills`. Enable, disable, update or uninstall a plugin; refresh or remove a
-  marketplace; **Check updates** marks newer versions without installing them. The
+  marketplace; **Check updates** marks newer versions without installing them, and
+  **Update all** refreshes every marketplace and updates every user-scope plugin. The
   install box takes `plugin@marketplace`, `owner/repo`, a git URL or a path. Restart
   Claude Code to apply plugin changes.
 

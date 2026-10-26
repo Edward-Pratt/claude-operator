@@ -30,21 +30,22 @@ local function trim(s)
 end
 
 -- One-line human outcome of a --json run: the JSON's message, else the
--- first stderr line.
+-- first stderr line. Also returns the decoded JSON line, when there is one.
 local function outcomeMessage(result)
     local last = nil
     for line in (result.stdout or ""):gmatch("[^\n]+") do
         last = line
     end
     local data = last and noctalia.json.decode(last)
-    if type(data) == "table" and type(data.message) == "string" and data.message ~= "" then
-        return data.message
+    if type(data) ~= "table" then data = nil end
+    if data and type(data.message) == "string" and data.message ~= "" then
+        return data.message, data
     end
     local err = (result.stderr or ""):match("[^\n]+")
-    if err then return err end
+    if err then return err, data end
     -- Nothing said: at least say how it ended.
-    if result.timedOut then return "timed out" end
-    return result.exitCode == 127 and "claude not found" or `exit {result.exitCode}`
+    if result.timedOut then return "timed out", data end
+    return result.exitCode == 127 and "claude not found" or `exit {result.exitCode}`, data
 end
 
 -- Logged with the command, so a failure on someone else's machine can be traced.
@@ -70,9 +71,10 @@ local function runCli(args, done)
             done(false, "")
             return
         end
-        local message = trim(outcomeMessage(result))
+        local message, data = outcomeMessage(result)
+        message = trim(message)
         if result.exitCode ~= 0 then logFailure(args, message) end
-        done(result.exitCode == 0, message)
+        done(result.exitCode == 0, message, data)
     end, CLI_TIMEOUT)
     if not ok then
         logFailure(args, "could not start")
@@ -330,6 +332,35 @@ end
 function M.checkUpdates(_, done)
     -- No --json: the CLI accepts it only together with a marketplace name.
     runCli({ "marketplace", "update" }, done)
+end
+
+-- Refreshes every marketplace, then updates the given plugins one at a time (parallel
+-- runs would race on the same settings and cache). done(ok, summary); ok is false when
+-- any plugin failed.
+function M.updateAll(list, done)
+    local updated, failed = {}, {}
+    local i = 0
+    local function nextPlugin()
+        i += 1
+        local p = list[i]
+        if p == nil then
+            local parts = {}
+            if #updated > 0 then table.insert(parts, "Updated " .. table.concat(updated, ", ") .. ". Restart Claude Code to apply.") end
+            if #failed > 0 then table.insert(parts, "Failed: " .. table.concat(failed, ", ") .. ".") end
+            done(#failed == 0, #parts > 0 and table.concat(parts, " ") or "Every plugin is up to date.")
+            return
+        end
+        M.updatePlugin(p, function(ok, _, data)
+            if not ok then
+                table.insert(failed, p.name)
+            elseif data and data.updateOutcome ~= "up_to_date" then
+                table.insert(updated, p.name)
+            end
+            nextPlugin()
+        end)
+    end
+    -- A marketplace that fails to refresh still leaves the others' catalogs current.
+    M.checkUpdates(nil, nextPlugin)
 end
 
 function M.updateMarketplace(name, done)

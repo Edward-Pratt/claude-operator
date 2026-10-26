@@ -49,7 +49,7 @@ local function run(ctx, key, label, action, arg, after)
   action(arg, function(ok, message)
     busy[key] = nil
     if ok then
-      noctalia.notify("Claude Operator", `{label}: done.` .. (after and (" " .. after) or ""))
+      noctalia.notify("Claude Operator", (message ~= "" and message or `{label}: done.`) .. (after and (" " .. after) or ""))
     else
       noctalia.notifyError("Claude Operator", message ~= "" and message or `{label}: failed`)
     end
@@ -59,6 +59,18 @@ end
 
 local function actionButton(key, glyph, tooltip, onClick)
   return kit.iconButton(busy[key] and "loader-2" or glyph, tooltip, onClick, { enabled = not busy[key] })
+end
+
+-- User-scope plugins only: a project or local one is tied to a project folder, and
+-- updating it from here would fail.
+local function updatable()
+  local list = {}
+  for _, g in ipairs(data.groups or {}) do
+    for _, p in ipairs(g.plugins) do
+      if p.scope == "user" then list[#list + 1] = p end
+    end
+  end
+  return list
 end
 
 local function ask(ctx, key) return function() confirming = key; ctx.render() end end
@@ -138,12 +150,17 @@ local function submitInstall(ctx)
 end
 
 function M.render(ctx)
-  local checking = busy.check == true
+  local checking, updatingAll = busy.check == true, busy.updateAll == true
   local rows = {
     ui.row({ key = "plugins-tools", gap = 8, align = "center" }, {
-      kit.muted("Check updates fetches every marketplace and marks newer versions. It installs nothing.", 11, { flexGrow = 1, maxLines = 2 }),
+      kit.muted("Check updates marks newer versions and installs nothing. Update all installs them.", 11, { flexGrow = 1, maxLines = 2 }),
       ui.button({ glyph = checking and "loader-2" or "cloud-search", text = "Check updates", variant = "ghost", controlSize = "sm",
-        enabled = not checking, onClick = function() run(ctx, "check", "Check updates", plugins.checkUpdates, nil) end }),
+        enabled = not checking and not updatingAll,
+        onClick = function() run(ctx, "check", "Check updates", plugins.checkUpdates, nil) end }),
+      ui.button({ glyph = updatingAll and "loader-2" or "circle-arrow-up", text = "Update all", variant = "ghost", controlSize = "sm",
+        tooltip = "Refresh every marketplace, then update every user-scope plugin",
+        enabled = not updatingAll and not checking and data.groups ~= nil,
+        onClick = function() run(ctx, "updateAll", "Update all", plugins.updateAll, updatable()) end }),
     }),
   }
   if data.error then
