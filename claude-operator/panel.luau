@@ -4,6 +4,7 @@
 -- `nav` (kit.nav) for up/down/Return. Tabs read the service's state from ctx.S and
 -- never poll; the heavier listings (sessions, CLAUDE.md, plugins) load on show.
 local shared = require("./shared.luau")
+local kit = require("./kit.luau")
 local TABS = {
   { id = "live", label = "Live", glyph = "activity", mod = require("./tab-live.luau") },
   { id = "usage", label = "Usage", glyph = "chart-bar", mod = require("./tab-usage.luau") },
@@ -41,17 +42,21 @@ local function rates() return type(S.pricing) == "table" and S.pricing.rates or 
 local function header()
   local total = 0
   for _, s in ipairs(S.sessions) do total += (s.d and s.d.cost or 0) end
-  local limits = S.accounts[1] and S.accounts[1].limits
-  local sub = limits and shared.planName(limits.subscription, limits.tier) or "Claude Code"
-  if total > 0 then sub = `{sub} · {shared.money(total, rates())} across live sessions` end
+  local status, statusColor, statusGlyph = kit.statusLine(S, shared)
   local tab = BY_ID[active].mod
   return ui.row({ gap = 10, align = "center" }, {
     ui.column({ width = 30, height = 30, radius = 8, fill = "primary/0.15", align = "center", justify = "center" }, {
       ui.glyph({ name = "headset", size = 17, color = "primary" }),
     }),
-    ui.column({ gap = 0, flexGrow = 1 }, {
-      ui.label({ text = "Claude Operator", fontSize = 15, fontWeight = "bold" }),
-      ui.label({ text = sub, fontSize = 10, color = "on_surface_variant", maxLines = 1 }),
+    ui.column({ gap = 1, flexGrow = 1 }, {
+      ui.row({ gap = 8, align = "center" }, {
+        ui.label({ text = "Claude Operator", fontSize = 15, fontWeight = "bold" }),
+        total > 0 and kit.muted(`{shared.money(total, rates())} live`, 10) or ui.spacer({ width = 0 }),
+      }),
+      ui.row({ gap = 5, align = "center" }, {
+        ui.glyph({ name = statusGlyph, size = 11, color = statusColor }),
+        ui.label({ text = status, fontSize = 11, color = statusColor, maxLines = 1, flexGrow = 1 }),
+      }),
     }),
     ui.button({ glyph = tab.busy and tab.busy(ctx) and "loader-2" or "refresh", variant = "ghost", controlSize = "sm",
       tooltip = "Refresh", onClick = function()

@@ -188,9 +188,9 @@ entry = "widget.luau"
   type = "select"
   label_key = "settings.bar_limits_style.label"
   description_key = "settings.bar_limits_style.description"
-  default = "ring"
+  default = "gauge"
   options = [
-    { value = "ring", label_key = "settings.bar_limits_style.options.ring" },
+    { value = "gauge", label_key = "settings.bar_limits_style.options.gauge" },
     { value = "bar", label_key = "settings.bar_limits_style.options.bar" },
     { value = "text", label_key = "settings.bar_limits_style.options.text" },
   ]

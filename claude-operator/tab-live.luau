@@ -27,11 +27,15 @@ local MODE_GLYPH = { auto = "bolt", plan = "map", default = "shield-check", acce
 -- same key; counting them keeps the card active while the pointer moves between them.
 local hoverCount = {}
 local showRecent, showPicker = false, false
+local expanded = {} -- card key -> true while its last-reply preview is open
 local armedKill, armedAt = nil, 0 -- stopping a session takes a second click within 3 s
 
 function M.opened()
   hoverCount, showPicker, armedKill = {}, false, nil
 end
+
+-- Lamps of sessions that need you blink with the panel's second tick.
+local function blinkOff() return os.time() % 2 == 1 end
 
 local function hoverHandler(ctx, key)
   return function(entered)
@@ -61,24 +65,60 @@ local function actionsRow(ctx, key, actions)
   return ui.row({ gap = 2, align = "center", height = 24 }, actions)
 end
 
-local function cardShell(ctx, key, status, main, onActivate)
+local LAMP = { waiting = "error", busy = "primary", idle = "on_surface_variant/0.5", remote = "secondary", recent = "on_surface/0.18" }
+
+-- A card is a line on the board: a lamp down its left edge (blinking while it needs
+-- you), then its body. Every prop is set on every render: the host keeps a prop that a
+-- later render leaves out.
+local function cardShell(ctx, key, status, body, onActivate)
   local active = isActive(key)
   local selected = M.nav:selectedKey() == key
-  return ui.column({
-    key = key, gap = 4, padding = 10, radius = 10,
-    opacity = status == "idle" and not active and 0.75 or 1,
-    fill = status == "waiting" and "error/0.07" or active and "on_surface/0.10" or "on_surface/0.04",
-    border = status == "waiting" and "error/0.5" or selected and "primary/0.6" or nil,
-    borderWidth = (status == "waiting" or selected) and 1 or nil,
+  local waiting = status == "waiting"
+  return ui.row({
+    key = key, gap = 10, padding = 10, radius = 10, align = "stretch",
+    opacity = (status == "idle" or status == "recent") and not active and 0.75 or 1,
+    fill = waiting and "error/0.07" or active and "on_surface/0.10" or "on_surface/0.04",
+    border = waiting and "error/0.5" or selected and "primary/0.6" or "#00000000",
+    borderWidth = (waiting or selected) and 1 or 0,
     onHover = hoverHandler(ctx, key),
     onClick = onActivate,
-  }, { ui.row({ gap = 12, align = "start" }, main) })
+  }, {
+    ui.box({ width = 4, radius = 2, fill = LAMP[status] or LAMP.idle, opacity = waiting and blinkOff() and 0.3 or 1 }),
+    ui.column({ gap = 5, flexGrow = 1 }, body),
+  })
 end
 
-local function badge(glyph, color)
-  return ui.column({ width = 34, height = 34, radius = 9, fill = color .. "/0.15", align = "center", justify = "center" }, {
-    ui.glyph({ name = glyph, size = 18, color = color }),
-  })
+local function titleRow(ctx, key, line, title, age, ageColor, previewable)
+  local kids = {}
+  if line then kids[#kids + 1] = ui.label({ text = line, fontSize = 10, fontWeight = "bold", color = "on_surface_variant" }) end
+  kids[#kids + 1] = ui.label({ text = title, fontSize = 13, fontWeight = "bold", maxLines = 1, flexGrow = 1 })
+  kids[#kids + 1] = ui.label({ text = age, fontSize = 11, color = ageColor })
+  if previewable then
+    kids[#kids + 1] = ui.button({ glyph = expanded[key] and "chevron-up" or "chevron-down", variant = "ghost",
+      controlSize = "sm", height = 22, width = 24, glyphSize = 13,
+      tooltip = expanded[key] and "Hide Claude's last reply" or "Show Claude's last reply",
+      onHover = hoverHandler(ctx, key),
+      onClick = function() expanded[key] = not expanded[key] or nil; ctx.render() end })
+  end
+  return ui.row({ gap = 8, align = "center" }, kids)
+end
+
+-- Claude's last reply, and the questions of a pending AskUserQuestion.
+local function preview(s, d)
+  local rows = {}
+  if s.status == "waiting" and type(d.question) == "table" then
+    for _, q in ipairs(d.question) do
+      rows[#rows + 1] = ui.label({ text = q.question or "", fontSize = 12, fontWeight = "bold", color = "error", maxLines = 3 })
+      if type(q.options) == "table" and #q.options > 0 then
+        rows[#rows + 1] = kit.muted(table.concat(q.options, "  ·  "), 11, { maxLines = 2 })
+      end
+    end
+  end
+  if d.reply and d.reply ~= "" then
+    rows[#rows + 1] = ui.markdown({ text = d.reply .. (d.replyCut and "\n\n*…cut short; open the transcript for the rest*" or "") })
+  end
+  if #rows == 0 then rows[1] = kit.muted("No reply yet", 11) end
+  return ui.column({ gap = 6, padding = 10, radius = 8, fill = "on_surface/0.05" }, rows)
 end
 
 local function whereRow(cwd, branch, actions)
@@ -115,17 +155,14 @@ end
 
 -- ── Cards ───────────────────────────────────────────────────────────────────
 
-local function liveCard(ctx, s, key)
+local function liveCard(ctx, s, key, line)
   local look = LOOK[s.status] or LOOK.idle
   local d = s.d or {}
   local tool = d.tool and string.match(d.tool, "^([^:]+)") or nil
   local toolArg = d.tool and string.match(d.tool, "^[^:]+: (.*)$") or nil
 
   local body = {
-    ui.row({ gap = 8, align = "center" }, {
-      ui.label({ text = d.title or s.name, fontSize = 13, fontWeight = "bold", maxLines = 1, flexGrow = 1 }),
-      ui.label({ text = s.since > 0 and shared.ago(s.since) or "", fontSize = 11, color = look.color }),
-    }),
+    titleRow(ctx, key, line, d.title or s.name, s.since > 0 and shared.ago(s.since) or "", look.color, true),
   }
   if s.status == "waiting" then
     body[#body + 1] = kit.iconLine("alert-circle", s.waitingFor ~= "" and s.waitingFor or "Needs your input", "error", 12)
@@ -152,6 +189,11 @@ local function liveCard(ctx, s, key)
   if (d.agents or 0) > 0 then chips[#chips + 1] = kit.chip("robot", tostring(d.agents)) end
   if s.status ~= "busy" and d.turnMs then chips[#chips + 1] = kit.chip("clock", shared.dur(d.turnMs / 1000)) end
   body[#body + 1] = ui.row({ gap = 4, align = "center" }, chips)
+  body[#body + 1] = ui.row({ gap = 6, align = "center" }, {
+    kit.timeline(s.timeline, 4),
+    kit.muted("last hour", 9),
+  })
+  if expanded[key] then body[#body + 1] = preview(s, d) end
 
   local actions = commonActions(ctx, s.account, s.cwd, s.sessionId, s.transcript)
   if s.remote then
@@ -171,20 +213,14 @@ local function liveCard(ctx, s, key)
   end, { text = armed and "Stop?" or nil, variant = armed and "destructive" or "ghost" })
 
   table.insert(body, 2, whereRow(s.cwd, d.branch, actionsRow(ctx, key, actions)))
-  return cardShell(ctx, key, s.status, {
-    badge(look.glyph, look.color),
-    ui.column({ gap = 5, flexGrow = 1 }, body),
-  }, function() shared.focus(s); ctx.close() end)
+  return cardShell(ctx, key, s.status, body, function() shared.focus(s); ctx.close() end)
 end
 
 local function remoteCard(ctx, r, key)
   local waiting = r.category == "need_input"
   local function open() shared.open(r.url); ctx.close() end
   local body = {
-    ui.row({ gap = 8, align = "center" }, {
-      ui.label({ text = r.title, fontSize = 13, fontWeight = "bold", maxLines = 1, flexGrow = 1 }),
-      ui.label({ text = r.since > 0 and shared.ago(r.since) or "", fontSize = 11, color = waiting and "error" or "secondary" }),
-    }),
+    titleRow(ctx, key, nil, r.title, r.since > 0 and shared.ago(r.since) or "", waiting and "error" or "secondary", false),
     ui.row({ gap = 5, align = "center" }, {
       ui.glyph({ name = "world", size = 12, color = "on_surface_variant" }),
       ui.label({ text = r.branch and `elsewhere · {r.branch}` or "elsewhere", fontSize = 11, color = "on_surface_variant", maxLines = 1 }),
@@ -208,29 +244,20 @@ local function remoteCard(ctx, r, key)
   if r.mode then chips[#chips + 1] = kit.chip(MODE_GLYPH[r.mode] or "shield", r.mode) end
   if r.context then chips[#chips + 1] = contextChip(r.context, r.maxContext) end
   body[#body + 1] = ui.row({ gap = 4, align = "center" }, chips)
-  return cardShell(ctx, key, waiting and "waiting" or "remote", {
-    badge(waiting and "bell-ringing" or "world", waiting and "error" or "secondary"),
-    ui.column({ gap = 5, flexGrow = 1 }, body),
-  }, open)
+  return cardShell(ctx, key, waiting and "waiting" or "remote", body, open)
 end
 
 local function recentCard(ctx, r, key)
   local function resume() shared.resume(r.account, r.cwd, r.sessionId); ctx.close() end
   local body = {
-    ui.row({ gap = 8, align = "center" }, {
-      ui.label({ text = r.title ~= "" and r.title or r.prompt, fontSize = 12, fontWeight = "bold", maxLines = 1, flexGrow = 1 }),
-      ui.label({ text = shared.ago(r.mtime), fontSize = 11, color = "on_surface_variant" }),
-    }),
+    titleRow(ctx, key, nil, r.title ~= "" and r.title or r.prompt, shared.ago(r.mtime), "on_surface_variant", false),
   }
   local actions = commonActions(ctx, r.account, r.cwd, r.sessionId, r.transcript)
   table.insert(actions, 1, cardAction("player-play", "Resume", resume))
   body[#body + 1] = whereRow(r.cwd, nil, actionsRow(ctx, key, actions))
   if r.title ~= "" and r.prompt ~= "" then body[#body + 1] = kit.iconLine("message-circle", r.prompt) end
   if shared.multiAccount() then body[#body + 1] = ui.row({ gap = 4 }, { kit.chip("user-circle", shared.accountLabel(r.account)) }) end
-  return cardShell(ctx, key, "idle", {
-    badge("history", "secondary"),
-    ui.column({ gap = 4, flexGrow = 1 }, body),
-  }, resume)
+  return cardShell(ctx, key, "recent", body, resume)
 end
 
 -- ── Sections ────────────────────────────────────────────────────────────────
@@ -321,13 +348,15 @@ function M.render(ctx)
   local strip = limitsStrip(ctx, S.accounts[1] and S.accounts[1].limits)
   if strip then content[#content + 1] = strip end
 
+  local lineNo = 0
   for _, g in ipairs(GROUPS) do
     if #by[g.status] > 0 then
       content[#content + 1] = sectionHeader(g.title, #by[g.status], g.color)
       for _, s in ipairs(by[g.status]) do
         local key = "live:" .. s.pid
         M.nav:add(key, function() shared.focus(s); ctx.close() end)
-        content[#content + 1] = liveCard(ctx, s, key)
+        lineNo += 1
+        content[#content + 1] = liveCard(ctx, s, key, `L{lineNo}`)
       end
     end
   end

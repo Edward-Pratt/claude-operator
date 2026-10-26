@@ -86,7 +86,7 @@
       "label": "Bar limits style",
       "description": "How each window is drawn on the bar.",
       "options": {
-        "ring": "Ring",
+        "gauge": "Nested gauge (5h inside 7d, faint arc = projection)",
         "bar": "Linear bar",
         "text": "Percentage only"
       }

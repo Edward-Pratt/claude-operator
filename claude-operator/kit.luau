@@ -80,6 +80,54 @@ function M.paceBar(p, color, height, marker)
   })
 end
 
+-- The last hour of a session as a strip: working, waiting and idle stretches in their
+-- colours, an unknown stretch (before the plugin saw the session) as track.
+local STATUS_FILL = { waiting = "error", busy = "primary", idle = "on_surface/0.22" }
+
+function M.timeline(tl, height)
+  local now = noctalia.nowMs()
+  local start = now - 3600000
+  local segs = {}
+  local function seg(weight, fill)
+    if weight > 0 then segs[#segs + 1] = ui.box({ flexGrow = weight, height = height or 4, radius = 1, fill = fill }) end
+  end
+  if tl and tl[1] and tl[1][1] > start then seg(tl[1][1] - start, "on_surface/0.07") end
+  for i, e in ipairs(tl or {}) do
+    local from = math.max(e[1], start)
+    local to = tl[i + 1] and tl[i + 1][1] or now
+    seg(to - from, STATUS_FILL[e[2]] or STATUS_FILL.idle)
+  end
+  if #segs == 0 then seg(1, "on_surface/0.07") end
+  return ui.row({ gap = 1, height = height or 4, flexGrow = 1 }, segs)
+end
+
+-- The one line the panel header leads with: the most urgent thing on the board.
+-- Returns text, color role and glyph.
+function M.statusLine(S, shared)
+  for _, s in ipairs(S.sessions) do
+    if s.status == "waiting" then
+      local title = s.d and s.d.title or s.name
+      return `{title} needs you` .. (s.waitingFor ~= "" and `: {s.waitingFor}` or ""), "error", "bell-ringing"
+    end
+  end
+  for _, r in ipairs(S.elsewhere) do
+    if r.category == "need_input" then return `{r.title} needs you (elsewhere)`, "error", "bell-ringing" end
+  end
+  local limits = S.accounts[1] and S.accounts[1].limits
+  local worst, worstP, rank = nil, nil, { soon = 3, limit = 4, hit = 2 }
+  for _, w in ipairs(limits and limits.windows or {}) do
+    local p = shared.pace(w)
+    if rank[p.status] and (not worstP or rank[p.status] > rank[worstP.status]) then worst, worstP = w, p end
+  end
+  if worst then
+    return `{worst.label} limit: {shared.paceShort(worst, worstP)}`, shared.paceColor(worstP.status, "primary"), "gauge"
+  end
+  local busy, idle = 0, 0
+  for _, s in ipairs(S.sessions) do if s.status == "busy" then busy += 1 else idle += 1 end end
+  if busy + idle == 0 then return "All quiet: no sessions running", "on_surface_variant", "moon" end
+  return `{busy} working · {idle} idle`, busy > 0 and "primary" or "on_surface_variant", "activity"
+end
+
 -- Inline "are you sure" row under the thing it confirms.
 function M.confirmStrip(key, text, yesText, onYes, onNo)
   return ui.row({ key = "confirm-" .. key, gap = 8, align = "center", paddingH = 4 }, {

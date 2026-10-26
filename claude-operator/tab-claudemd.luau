@@ -62,7 +62,7 @@ function M.busy() return data.loading end
 local function row(label, path, selected)
   local exists = noctalia.fileExists(path)
   return ui.row({ key = "md-" .. path, gap = 8, align = "center", padding = 6, radius = 8,
-    fill = selected and "primary/0.10" or nil, onClick = function() shared.openInEditor(path) end }, {
+    fill = selected and "primary/0.10" or "#00000000", onClick = function() shared.openInEditor(path) end }, {
     ui.glyph({ name = exists and "file-text" or "file-plus", size = 15, color = exists and "primary" or "on_surface_variant" }),
     ui.column({ gap = 0, flexGrow = 1 }, {
       ui.label({ text = label, fontSize = 13 }),
