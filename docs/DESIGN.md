@@ -15,6 +15,8 @@ claude-operator/            repo root, added to noctalia as a `path` plugin sour
     plugin.toml
     service.luau            the only entry that reads Claude data or polls
     widget.luau             bar widget, renders state only
+    desktop.luau            desktop widget, renders state only
+    gauge.luau              lamp board and nested ring gauge, shared by both widgets
     panel.luau              panel shell: header, tabs, keys; one module per tab
     tab-*.luau              panel tabs: live, usage, sessions, claudemd ("Memory"), plugins
     kit.luau                ui building blocks and the keyboard selection model
@@ -56,9 +58,11 @@ accounts  = [{ dir, label, email, default,
                  { id, label, kind, model, percent, resetsAt, durationMs, severity,
                    samples = [{ t, percent }], rate, rateSpanMs } ] } }]
 sessions  = [{ pid, account, sessionId, name, cwd, status, waitingFor, since,
-               terminal, remote,            -- remote: claude.ai/code URL or nil
+               terminal, remote, transcript,  -- remote: claude.ai/code URL or nil
+               timeline = [{ t, status }],    -- transitions in the last hour
                d = { title, mode, branch, model, context, contextMax, tool, todos,
-                     prompt, cost, turnMs, agents } }]
+                     prompt, cost, turnMs, agents, reply, replyCut,
+                     question = [{ question, options }] } }]
              -- sorted waiting > busy > idle, then newest status change first
 recent    = [{ account, sessionId, cwd, title, prompt, mtime }]
 elsewhere = [{ account, id, url, title, category, needs, detail, model, context,
@@ -68,7 +72,10 @@ usage     = { updated, days = [7 weekday labels, today last], daily = [7], daily
               d7Messages, d7Sessions, d7Models = { [family] = tokens },
               topSessions = [{ id, cost, tokens, title, cwd }] }   -- rolling, ends today
 pricing   = { updated, rates = { GBP = 0.75, ... } }   -- for currency display
-command   = { action = "refresh", at }                 -- panel -> service
+index     = [{ account, id, path, cwd, branch, mtime, title, prompt, model, context,
+               empty }]                                -- every saved session, newest first
+pins      = [cwd]                                      -- pinned projects
+command   = { action = "refresh" | "open" | "reindex" | "pin", cwd?, at }  -- UI -> service
 ```
 
 ## Decisions
@@ -98,6 +105,15 @@ command   = { action = "refresh", at }                 -- panel -> service
   account picker come later.
 - **claude binary**: noctalia's environment often lacks `~/.local/bin`, so
   `shared.claudeBin()` falls back to `~/.local/bin/claude` and `~/.claude/local/claude`.
+
+## Look
+
+The switchboard: sessions are numbered lines with a status lamp (blinking while it needs
+you); the bar and desktop widget share one lamp board and one nested ring gauge
+(`gauge.luau`); every surface leads with the same status line (`kit.statusLine`).
+Rings and the heatmap are SVGs in the data dir, one file per drawn state: the host may
+cache images by path. The host also keeps a prop a later render leaves out, so toggled
+props (opacity, border, fill) are always set explicitly.
 
 ## Efficiency
 

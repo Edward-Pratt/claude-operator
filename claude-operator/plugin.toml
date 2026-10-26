@@ -6,7 +6,7 @@
 
 id = "edward/claude-operator"
 name = "Claude Operator"
-version = "0.3.0"
+version = "0.4.0"
 # 33: revealKey on ui.scroll (session browser keeps the selection in view).
 # 31: noctalia.getColor for the bar's SVG rings. 24: argv process execution.
 # 22: relative luau imports.
@@ -195,6 +195,12 @@ entry = "widget.luau"
     { value = "text", label_key = "settings.bar_limits_style.options.text" },
   ]
   visible_when = { key = "bar_limits", values = ["5h", "7d", "5h_7d", "all"] }
+
+# The switchboard on the desktop: gauge, outlooks, lines and status. Add it from the
+# desktop widgets editor.
+[[desktop_widget]]
+id = "desktop"
+entry = "desktop.luau"
 
 [[panel]]
 id = "panel"

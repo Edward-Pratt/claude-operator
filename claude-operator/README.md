@@ -1,9 +1,12 @@
 # Claude Operator
 
-Every Claude Code session on one switchboard. The bar shows which sessions are working
-and which need you, next to your plan limits. The panel lets you jump to any session's
-terminal, resume old ones, follow usage and cost, and manage CLAUDE.md files and Claude
-Code plugins.
+Every Claude Code session on one switchboard. Each session is a lit line: the bar's lamps
+show which are working and which need you (blinking), and one gauge shows your plan
+windows and where your current rate takes them. The panel lets you read Claude's last
+reply without switching windows, jump to any session's terminal, resume and search every
+saved session, forecast your limits, see when and where your usage goes, and manage
+CLAUDE.md files and Claude Code plugins. A desktop widget puts the board on a second
+monitor.
 
 Claude Operator merges [claude-cockpit](https://github.com/noctalia-dev/community-plugins/tree/main/claude-cockpit)
 (nightwatch75) and [claude-sessions](https://github.com/noctalia-dev/community-plugins/tree/main/claude-sessions)
@@ -14,7 +17,7 @@ Claude Operator merges [claude-cockpit](https://github.com/noctalia-dev/communit
 | Field | Value |
 | --- | --- |
 | ID | `edward/claude-operator` |
-| Entries | Bar widget: `widget`; panel: `panel`; service: `service`; launcher provider: `search` |
+| Entries | Bar widget: `widget`; desktop widget: `desktop`; panel: `panel`; service: `service`; launcher provider: `search` |
 | Launcher Prefix | `/co` |
 
 ## Requirements
@@ -57,13 +60,16 @@ Add **Claude Operator** from the bar's widget picker. It shows:
 
 - The glyph, which turns into a red bell while a session waits for a permission or an
   answer (on this machine or, through Remote Control, on another one).
-- One dot per running session: red needs you, accent is working, grey is idle. After 8
-  it shows `+N`. Set **Bar style** to *Counts* for `waiting busy/total` instead.
-- The 5-hour and 7-day plan windows (pick others with **Bar limits**) as rings, bars or
-  plain percentages. A window turns to the warning colour when the current rate takes it
-  past 85% (or to 100% before the reset), and red when the limit is under an hour away
-  (5-hour window) or a day away (weekly), or reached. Numbers kept from before an expired
-  token are dimmed.
+- A lamp board: one lamp per running session, red and blinking while it needs you, accent
+  while working, dim when idle. After 8 it shows `+N`. Set **Bar style** to *Counts* for
+  `waiting busy/total` instead.
+- One nested gauge for the plan windows (pick them with **Bar limits**): the 5-hour
+  window inside the 7-day one, each with a solid arc for what is used and a faint arc for
+  where the current rate takes it by the reset; then their percentages, inside out
+  (`46·34%`). **Bar limits style** also offers bars or plain percentages. A window turns
+  to the warning colour when the current rate takes it past 85% (or to 100% before the
+  reset), and red when the limit is under an hour away (5-hour window) or a day away
+  (weekly), or reached. Numbers kept from before an expired token are dimmed.
 
 Hover it for every session, the plan, where each window is heading, and the cost of
 today and the last 7 days. Click it to open the panel.
@@ -74,25 +80,34 @@ today and the last 7 days. Click it to open the panel.
 noctalia msg panel-toggle edward/claude-operator:panel
 ```
 
+The header always leads with the most urgent thing on the board: a session that needs
+you, a limit about to be hit, or how many lines are working.
+
 - **Live**: plan limits, then running sessions grouped into *Needs you*, *Working* and
-  *Idle*. A card shows the title, folder and branch, the tool it is running or what it
-  waits for, todo progress, your last prompt, and chips for terminal, model, permission
-  mode, context use, cost, subagents and last turn time. Click a card to jump to its
-  terminal. Hover it, or select it with the keyboard, for its actions: open on claude.ai
+  *Idle*. Each session is a numbered line (`L1`, `L2`…) with a lamp down its edge that
+  blinks while it needs you. A card shows the title, folder and branch, the tool it is
+  running or what it waits for, todo progress, your last prompt, chips for terminal,
+  model, permission mode, context use, cost, subagents and last turn time, and a strip of
+  its last hour (working, waiting, idle). The chevron opens Claude's last reply, rendered,
+  and the questions of a pending AskUserQuestion, so you can see what it wants without
+  switching windows. Click a card to jump to its terminal. Hover it, or select it with the keyboard, for its actions: open on claude.ai
   (Remote Control), open a shell there, open the folder, copy a resume command, open
   the transcript, and stop the session (click twice). *Elsewhere* lists your Remote
   Control sessions on other machines. *Recent* lists closed sessions to resume.
-  **New session** starts Claude in a recent project.
-- **Usage**: each plan window as one bar: what you have used, where the current rate takes
-  you by the reset, and a tick for how much of the window has passed. Under it: when you
+  **New session** starts Claude in a pinned or recent project. Click the limits strip to
+  open Usage.
+- **Usage**: each plan window as a forecast graph: usage so far, then (faint) where the
+  current rate takes it by the reset, against an even-pace line to 100%. Under it: when you
   would hit the limit at this rate (or roughly where you will end up), the reset time, and
   the budget per hour or day that would last until the reset. The 5-hour window uses the
   last hour's rate once there is enough of it; weekly windows use their average so far,
   after the first 6 hours. Then estimated cost and tokens for today, 7 days and 30 days,
-  the last 7 days day by day, the five costliest sessions and the models used.
+  the last 7 days day by day, a 30-day weekday-by-hour heatmap of when you use Claude,
+  the five costliest sessions and the models used.
 - **Sessions**: every saved session, grouped by project (worktrees read as
-  `repo › worktree`). Filter by title, prompt or path, sort by date or name, show only
-  empty sessions. Click a session to resume it. Each row can open or create the
+  `repo › worktree`), pinned projects first. Filter by title, prompt or path, sort by date
+  or name, show only empty sessions. The pin on a project keeps it at the top here and in
+  **New session**. Click a session to resume it. Each row can open or create the
   project's CLAUDE.md, preview the prompt, or delete the session. The bin button deletes
   every empty session; running ones are always kept.
 - **Memory**: the global `~/.claude/CLAUDE.md`, every CLAUDE.md under your home folder,
@@ -110,7 +125,14 @@ closes. Letters always go to the text fields.
 
 Type `/co` and part of a session title or project path, for example `/co burrow`. Live
 sessions come first: activating one jumps to its terminal. Then Remote Control sessions
-elsewhere, which open on claude.ai, then recent sessions, which resume in a terminal.
+elsewhere, which open on claude.ai, then recent sessions, then every other saved session,
+all of which resume in a terminal.
+
+### Desktop widget
+
+Add **Claude Operator** in the desktop widgets editor (`noctalia msg desktop-widgets-edit`),
+for example on a second monitor. It shows a large gauge with each plan window's outlook,
+the first five lines (click one to jump to its terminal) and the status line.
 
 ## Settings
 
@@ -118,6 +140,7 @@ elsewhere, which open on claude.ai, then recent sessions, which resume in a term
 | --- | --- | --- | --- |
 | `notify_waiting` | `bool` | `true` | Notify when a session starts waiting for a permission or an answer. |
 | `notify_finished` | `bool` | `true` | Notify when a session goes from working to idle. |
+| `notify_limits` | `bool` | `true` | Notify once per window when the current rate reaches the 5-hour limit within the hour, or a weekly limit within a day. |
 | `finished_min_minutes` | `int` | `2` | Only notify about finished turns at least this many minutes long. |
 | `show_elsewhere` | `bool` | `true` | List your live Remote Control sessions on other machines, checked once a minute. |
 | `hide_idle_hours` | `int` | `0` | Hide live sessions idle longer than this many hours. `0` shows all. |
@@ -131,12 +154,12 @@ elsewhere, which open on claude.ai, then recent sessions, which resume in a term
 | `glyph` | `glyph` | `headset` | Bar widget glyph. |
 | `bar_style` | `select` | `dots` | `dots`: one dot per session. `counts`: waiting count, then busy/total. |
 | `bar_limits` | `select` | `5h_7d` | Windows on the bar: `5h`, `7d`, `5h_7d`, `all` (includes per-model weeks such as Fable) or `none`. |
-| `bar_limits_style` | `select` | `ring` | How each window is drawn: `ring`, `bar` or `text`. |
+| `bar_limits_style` | `select` | `gauge` | How the windows are drawn: `gauge` (nested rings), `bar` or `text`. |
 
 ## IPC
 
 ```sh
-# Refresh limits, usage, Recent and Remote Control now
+# Refresh limits, usage, Recent, Remote Control and the session index now
 noctalia msg plugin edward/claude-operator:service all refresh
 
 # Switch the panel to a tab: live, usage, sessions, claudemd or plugins
@@ -180,9 +203,10 @@ it on its next start), the last known limits stay visible, dimmed, with their ag
 ### Files written
 
 In the plugin data dir (`~/.local/state/noctalia/plugins/data/edward/claude-operator/`):
-`pricing.json` (prices and exchange rates), `limits.json` (last known limits),
-`accounts.json` (config dirs seen), `sessions/` (session browser cache) and `rings/`
-(bar ring images). Nothing is written under `~/.claude`.
+`pricing.json` (prices and exchange rates), `limits.json` (last known limits and their
+samples over each window), `accounts.json` (config dirs seen), `pins.json` (pinned
+projects), `sessions/` (session index cache), `usage/` (usage history cache), `gauges/`
+(gauge images) and `heat/` (the heatmap image). Nothing is written under `~/.claude`.
 
 ### Processes and deletes
 
