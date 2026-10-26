@@ -146,8 +146,11 @@ end
 function onOpen(_context)
   isOpen = true
   loadState()
-  for _, t in ipairs(TABS) do if t.mod.nav then t.mod.nav:reset() end end
-  if BY_ID[active].mod.opened then BY_ID[active].mod.opened(ctx) end
+  -- Every tab resets: a pointer that left while the panel was closing never reported it.
+  for _, t in ipairs(TABS) do
+    if t.mod.nav then t.mod.nav:reset() end
+    if t.mod.opened then t.mod.opened(ctx) end
+  end
   if BY_ID[active].mod.show then BY_ID[active].mod.show(ctx) end
   noctalia.state.set("panel_open", true)
   shared.requestRefresh("open")

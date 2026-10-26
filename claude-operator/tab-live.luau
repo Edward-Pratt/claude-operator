@@ -93,7 +93,9 @@ local function whereRow(cwd, branch, actions)
   return ui.row({ gap = 5, align = "center" }, where)
 end
 
-local function commonActions(ctx, account, cwd, sid)
+-- transcript: the path the service resolved (a session that moved dirs is filed under
+-- the dir it started in); the encoded cwd is only a fallback.
+local function commonActions(ctx, account, cwd, sid, transcript)
   return {
     cardAction("terminal-2", "Open a shell here", function() shared.launch(cwd); ctx.close() end),
     cardAction("folder-open", "Open in file manager", function() shared.open(cwd); ctx.close() end),
@@ -101,7 +103,7 @@ local function commonActions(ctx, account, cwd, sid)
       noctalia.copyToClipboard(shared.resumeCommand(account, cwd, sid), "text/plain")
       noctalia.notify("Copied", shared.resumeCommand(account, cwd, sid))
     end),
-    cardAction("file-text", "Open transcript", function() shared.open(shared.transcript(account, cwd, sid)); ctx.close() end),
+    cardAction("file-text", "Open transcript", function() shared.open(transcript or shared.transcript(account, cwd, sid)); ctx.close() end),
   }
 end
 
@@ -151,7 +153,7 @@ local function liveCard(ctx, s, key)
   if s.status ~= "busy" and d.turnMs then chips[#chips + 1] = kit.chip("clock", shared.dur(d.turnMs / 1000)) end
   body[#body + 1] = ui.row({ gap = 4, align = "center" }, chips)
 
-  local actions = commonActions(ctx, s.account, s.cwd, s.sessionId)
+  local actions = commonActions(ctx, s.account, s.cwd, s.sessionId, s.transcript)
   if s.remote then
     table.insert(actions, 1, cardAction("external-link", "Open on claude.ai (Remote Control)", function()
       shared.open(s.remote); ctx.close()
@@ -220,7 +222,7 @@ local function recentCard(ctx, r, key)
       ui.label({ text = shared.ago(r.mtime), fontSize = 11, color = "on_surface_variant" }),
     }),
   }
-  local actions = commonActions(ctx, r.account, r.cwd, r.sessionId)
+  local actions = commonActions(ctx, r.account, r.cwd, r.sessionId, r.transcript)
   table.insert(actions, 1, cardAction("player-play", "Resume", resume))
   body[#body + 1] = whereRow(r.cwd, nil, actionsRow(ctx, key, actions))
   if r.title ~= "" and r.prompt ~= "" then body[#body + 1] = kit.iconLine("message-circle", r.prompt) end

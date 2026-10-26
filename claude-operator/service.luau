@@ -378,6 +378,7 @@ local function publishSessions()
   for _, s in ipairs(current) do
     local d = details[s.pid]
     s.d = d and d.data or nil
+    s.transcript = d and d.path or nil
   end
   noctalia.state.set("sessions", current)
 end
@@ -550,10 +551,7 @@ noctalia.state.watch("command", function(v)
   end
 end)
 function update() poll() end
-function onIpc(event)
-  if event == "refresh" then refreshAll() end
-  if event == "dump" then noctalia.writeFile(DATA .. "/dump.json", noctalia.json.encode({ sessions = current, recent = noctalia.state.get("recent"), usage = noctalia.state.get("usage"), elsewhere = noctalia.state.get("elsewhere") })) end -- DEBUG
-end
+function onIpc(event) if event == "refresh" then refreshAll() end end
 function onConfigChanged() refreshAll() end
 
 noctalia.mkdirAll(DATA)

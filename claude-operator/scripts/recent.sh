@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # recent.sh COUNT CONFIG_DIR...: JSON array of the COUNT most recently touched sessions
-# across the given Claude config dirs: [{account, sessionId, cwd, title, prompt, mtime}],
+# across the given Claude config dirs: [{account, sessionId, cwd, title, transcript, prompt,
+# mtime}],
 # mtime in epoch ms. Sessions with neither a title nor a prompt (opened and closed at
 # once) are skipped. Derived from claude-sessions' recent.sh (lfdominguez, MIT).
 n=${1:-20}; shift
@@ -27,11 +28,11 @@ while read -r t f; do
   done
   [ -n "$owner" ] && cfg=$owner
   { grep -m1 -F '"cwd":"' -- "$f"; grep -F -e '"type":"ai-title"' -e '"type":"last-prompt"' -- "$f"; } \
-    | jq -sc --arg a "$cfg" --arg s "$sid" --argjson m "${t%.*}" '
+    | jq -sc --arg a "$cfg" --arg s "$sid" --arg f "$f" --argjson m "${t%.*}" '
         (map(select(.cwd)) | first | .cwd // "") as $cwd
         | (map(select(.type == "ai-title")) | last | .aiTitle // "") as $title
         | (map(select(.type == "last-prompt")) | last | .lastPrompt // "") as $prompt
         | select($cwd != "" and ($title + $prompt) != "")
-        | { account: $a, sessionId: $s, cwd: $cwd, title: $title,
+        | { account: $a, sessionId: $s, cwd: $cwd, title: $title, transcript: $f,
             prompt: ($prompt | gsub("\\s+"; " ") | .[0:160]), mtime: ($m * 1000) }'
 done | jq -sc .
