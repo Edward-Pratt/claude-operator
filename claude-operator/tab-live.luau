@@ -9,9 +9,9 @@ local M = {}
 M.nav = kit.nav()
 
 local GROUPS = {
-  { status = "waiting", title = "Needs you", glyph = "bell-ringing", color = "error" },
-  { status = "busy", title = "Working", glyph = "loader-2", color = "primary" },
-  { status = "idle", title = "Idle", glyph = "circle-check", color = "on_surface_variant" },
+  { status = "waiting", title = "Needs you", pill = "need you", glyph = "bell-ringing", color = "error" },
+  { status = "busy", title = "Working", pill = "working", glyph = "loader-2", color = "primary" },
+  { status = "idle", title = "Idle", pill = "idle", glyph = "circle-check", color = "on_surface_variant" },
 }
 local LOOK = {}
 for _, g in ipairs(GROUPS) do LOOK[g.status] = g end
@@ -244,36 +244,38 @@ local function sectionHeader(text, count, color, onClick, glyph)
   return ui.row({ gap = 6, align = "center", paddingH = 2, paddingV = onClick and 4 or 0, onClick = onClick }, kids)
 end
 
--- One meter per plan window, with its reset countdown and pace.
-local function limitsStrip(limits)
+-- One meter per plan window: used and projected, and where it is heading. Click the
+-- strip for the full picture on the Usage tab.
+local function limitsStrip(ctx, limits)
   if not limits or #(limits.windows or {}) == 0 then return nil end
   local meters = {}
   for _, w in ipairs(limits.windows) do
     local p = shared.pace(w)
     local color = shared.paceColor(p.status, "primary")
-    local left = shared.countdown(w.resetsAt)
-    meters[#meters + 1] = ui.column({ gap = 3, flexGrow = 1 }, {
+    meters[#meters + 1] = ui.column({ gap = 4, flexGrow = 1 }, {
       ui.row({ gap = 4, align = "center" }, {
         ui.label({ text = w.label, fontSize = 11, fontWeight = "bold" }),
         ui.spacer({ flexGrow = 1 }),
-        ui.label({ text = `{shared.round(w.percent)}%`, fontSize = 11, fontWeight = "bold", color = color }),
+        ui.label({ text = `{shared.round(w.percent)}%`, fontSize = 12, fontWeight = "bold", color = color }),
       }),
-      ui.progress({ progress = math.max(0, math.min(100, w.percent)) / 100, height = 5, fill = color }),
-      ui.label({ text = left and `resets in {left}` or "", fontSize = 10, color = "on_surface_variant" }),
+      kit.paceBar(p, color, 5),
+      ui.label({ text = shared.paceShort(w, p), fontSize = 10, maxLines = 1,
+        color = color == "primary" and "on_surface_variant" or color }),
     })
   end
-  local strip = { ui.row({ gap = 14, align = "start" }, meters) }
+  local strip = { ui.row({ gap = 16, align = "start" }, meters) }
   if limits.stale then
     strip[#strip + 1] = kit.iconLine("clock-exclamation",
-      `updated {shared.ago(limits.updated)} ago` .. (limits.error and ` · {limits.error}` or ""), "tertiary")
+      `limits from {shared.ago(limits.updated)} ago` .. (limits.error and ` · {limits.error}` or ""), "tertiary")
   end
-  return ui.column({ gap = 6, padding = 10, radius = 10, fill = "on_surface/0.04", opacity = limits.stale and 0.75 or 1 }, strip)
+  return ui.column({ key = "limits-strip", gap = 6, padding = 10, radius = 10, fill = "on_surface/0.04",
+    opacity = limits.stale and 0.75 or 1, tooltip = "Open Usage for details", onClick = function() ctx.setTab("usage") end }, strip)
 end
 
 local function countPill(g, n)
-  return ui.row({ gap = 4, align = "center", paddingH = 8, paddingV = 3, radius = 10, fill = g.color .. "/0.15" }, {
+  return ui.row({ gap = 5, align = "center", paddingH = 9, paddingV = 4, radius = 10, fill = g.color .. "/0.14" }, {
     ui.glyph({ name = g.glyph, size = 12, color = g.color }),
-    ui.label({ text = tostring(n), fontSize = 11, fontWeight = "bold", color = g.color }),
+    ui.label({ text = `{n} {g.pill}`, fontSize = 11, fontWeight = "bold", color = g.color }),
   })
 end
 
@@ -316,7 +318,7 @@ function M.render(ctx)
 
   local content = {}
   if showPicker then content[#content + 1] = picker(ctx) end
-  local strip = limitsStrip(S.accounts[1] and S.accounts[1].limits)
+  local strip = limitsStrip(ctx, S.accounts[1] and S.accounts[1].limits)
   if strip then content[#content + 1] = strip end
 
   for _, g in ipairs(GROUPS) do
@@ -356,8 +358,8 @@ function M.render(ctx)
     ui.row({ gap = 6, align = "center" }, toolbar),
     ui.scroll({ key = "live-scroll", flexGrow = 1, gap = 8, revealKey = M.nav.reveal }, content),
     ui.row({ gap = 12, align = "center" }, {
-      kit.iconLine("pointer", "Click to jump (kitty: exact tab)"),
-      kit.iconLine("keyboard", "↑↓ select · ⏎ jump"),
+      kit.iconLine("pointer", "Click a card to jump to it · hover or select it for actions"),
+      kit.iconLine("keyboard", "↑↓ ⏎"),
     }),
   })
 end

@@ -184,19 +184,48 @@ local function windowLabel(w)
   return (w.model or w.kind or "?") .. (w.group == "weekly" and " 7d" or "")
 end
 
-local function shapeLimits(raw)
+-- Usage samples per window, so the UI can project from the recent burn rate rather than
+-- the window's average: the 5-hour window is mostly about the last half hour. A sample
+-- is added on every successful fetch; a new resetsAt means a new window, which starts
+-- an empty list. Lookback per window kind, and the shortest span a rate is trusted from.
+local LOOKBACK = { session = HOUR_MS, weekly = DAY_MS }
+local MIN_SPAN = { session = 15 * 60000, weekly = 3 * HOUR_MS }
+
+local function addSample(w, prev, now)
+  local same = prev and prev.resetsAt and w.resetsAt and math.abs(prev.resetsAt - w.resetsAt) < 10 * 60000
+  local samples = {}
+  local lookback = LOOKBACK[w.kind == "session" and "session" or "weekly"]
+  for _, smp in ipairs(same and type(prev.samples) == "table" and prev.samples or {}) do
+    if now - smp[1] <= lookback then samples[#samples + 1] = smp end
+  end
+  samples[#samples + 1] = { now, w.percent }
+  w.samples = samples
+  local first = samples[1]
+  local span = now - first[1]
+  if span >= MIN_SPAN[w.kind == "session" and "session" or "weekly"] then
+    w.rate = math.max(0, (w.percent - first[2]) / (span / HOUR_MS)) -- percent per hour
+    w.rateSpanMs = span
+  end
+end
+
+local function shapeLimits(raw, previous)
+  local now = noctalia.nowMs()
+  local prevById = {}
+  for _, w in ipairs(previous and previous.windows or {}) do prevById[w.id] = w end
   local windows = {}
   for _, w in ipairs(type(raw.windows) == "table" and raw.windows or {}) do
     if type(w) == "table" and tonumber(w.percent) then
-      windows[#windows + 1] = {
+      local shaped = {
         id = `{w.kind or "window"}:{w.model or ""}`, label = windowLabel(w),
         kind = w.kind, group = w.group, model = w.model,
         percent = tonumber(w.percent), resetsAt = isoToMs(w.resets_at),
         durationMs = WINDOW_MS[w.kind] or 7 * DAY_MS, severity = w.severity,
       }
+      addSample(shaped, prevById[shaped.id], now)
+      windows[#windows + 1] = shaped
     end
   end
-  return { updated = noctalia.nowMs(), stale = false, subscription = raw.subscription, tier = raw.tier, windows = windows }
+  return { updated = now, stale = false, subscription = raw.subscription, tier = raw.tier, windows = windows }
 end
 
 local function saveLimits()
@@ -214,7 +243,7 @@ local function fetchLimits(a)
     a.limitsPending = false
     local err = nil
     if raw then
-      a.limits = shapeLimits(raw)
+      a.limits = shapeLimits(raw, a.limits)
       saveLimits()
     else
       err = noctalia.string.trim(r.stderr or "")

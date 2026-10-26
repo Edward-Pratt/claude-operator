@@ -23,6 +23,7 @@ fi
 p=$pid
 while [ -n "$p" ] && [ "$p" -gt 1 ]; do
   wm_focus_pid "$p" && exit 0
-  p=$(awk '{print $4}' "/proc/$p/stat" 2>/dev/null)
+  # The parent pid follows the last ")": comm (field 2) may itself contain spaces.
+  p=$(sed 's/.*) //' "/proc/$p/stat" 2>/dev/null | cut -d' ' -f2)
 done
 exit 1

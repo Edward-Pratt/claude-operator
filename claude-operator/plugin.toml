@@ -18,7 +18,7 @@ license = "MIT"
 # run time, so they are not listed.
 dependencies = [
   "bash", "jq", "curl", "find", "grep", "sed", "awk", "tac", "stat", "sort", "head", "tail",
-  "tr", "xargs", "date", "basename", "dirname", "readlink", "cat", "mkdir", "mv", "rm",
+  "tr", "cut", "xargs", "date", "basename", "dirname", "readlink", "cat", "mkdir", "mv", "rm",
   "pgrep", "kill", "xdg-open", "claude",
 ]
 tags = ["ai", "development", "bar", "panel", "launcher", "service", "productivity"]

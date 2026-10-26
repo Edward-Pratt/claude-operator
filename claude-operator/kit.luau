@@ -49,6 +49,37 @@ function M.iconButton(glyph, tooltip, onClick, props)
   return ui.button(p)
 end
 
+-- A plan window as one bar: used (solid), where the current rate takes it by the reset
+-- (faint, capped at 100%), and what is left; with `marker`, a tick under the bar shows
+-- how much of the window's time has gone. Built from flex-weighted boxes, so it fills
+-- whatever width its container has.
+function M.paceBar(p, color, height, marker)
+  height = height or 8
+  local used = math.max(0, math.min(100, p.util or 0))
+  local ahead = p.projected and math.max(0, math.min(100, p.projected) - used) or 0
+  local rest = 100 - used - ahead
+  local segs = {}
+  local function seg(weight, fill)
+    if weight > 0.2 then
+      segs[#segs + 1] = ui.box({ flexGrow = weight, height = height, radius = height / 2, fill = fill })
+    end
+  end
+  seg(used, color)
+  seg(ahead, color .. "/0.3")
+  seg(rest, "on_surface/0.12")
+  local bar = ui.row({ gap = 2, height = height }, segs)
+  if not marker or not p.timeFrac then return bar end
+  local f = math.max(0.001, math.min(0.999, p.timeFrac))
+  return ui.column({ gap = 2 }, {
+    bar,
+    ui.row({ gap = 0, height = 5, align = "start" }, {
+      ui.spacer({ flexGrow = f }),
+      ui.box({ width = 2, height = 5, radius = 1, fill = "on_surface/0.6" }),
+      ui.spacer({ flexGrow = 1 - f }),
+    }),
+  })
+end
+
 -- Inline "are you sure" row under the thing it confirms.
 function M.confirmStrip(key, text, yesText, onYes, onNo)
   return ui.row({ key = "confirm-" .. key, gap = 8, align = "center", paddingH = 4 }, {

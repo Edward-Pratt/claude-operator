@@ -168,8 +168,11 @@ function onClose()
   panel.setNeedsFrameTick(false)
 end
 
--- Second ticks keep the "3m ago" ages and countdowns moving.
-function update() render() end
+-- Second ticks keep the "3m ago" ages and countdowns moving; the list tabs have neither,
+-- and re-rendering hundreds of session rows every second would be wasted work.
+function update()
+  if active == "live" or active == "usage" then render() end
+end
 
 -- `noctalia msg plugin edward/claude-operator:panel all tab sessions` switches tabs
 -- (bind it next to panel-toggle to open straight onto one).

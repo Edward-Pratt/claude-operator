@@ -141,41 +141,110 @@ function M.planName(subscription, tier)
   return table.concat(parts, " ")
 end
 
-M.PACE_MARGIN = 5
-M.SEVERITY = { unknown = 0, under = 0, on = 0, over = 1, over_quota = 2 }
+-- How long a window must have run before its average burn rate means anything: twenty
+-- minutes of a week is noise.
+local MIN_ELAPSED = { session = 15 * 60000, weekly = 6 * M.HOUR_MS }
 
--- Is the window being used faster than the clock? Windows are treated as fixed-length
--- with elapsed time derived from the reset time: an approximation of the rolling
--- limits, good enough as a cue. The service's own `severity` wins when it is worse.
+local function isSession(w) return w.kind == "session" end
+
+-- Where the window is heading at the current burn rate.
+--   status   idle (no active window) | early (too soon to project) | ok | tight (on course
+--            for 85%+, or 100% only just before the reset) | hit (100% well before the
+--            reset) | soon (100% within the hour for the 5-hour window, within a day for a
+--            weekly one) | limit (at 100%)
+--   rate     percent per hour: the recent rate from the service's samples for the 5-hour
+--            window when it has them (`recent` = true), else the window's average so far
+--   projected percent at reset; etaMs = time until 100% when that is before the reset
+--   budget   percent per hour that would last exactly until the reset
+--   timeFrac share of the window's time already gone
+-- The API's own severity wins when it is worse.
 function M.pace(w)
   local util = tonumber(w.percent) or 0
-  local p
-  if not w.resetsAt then
-    p = util >= 100 and { timeFrac = 1, delta = util, status = "over_quota" } or { status = "unknown" }
-  else
-    local dur = w.durationMs or 7 * M.DAY_MS
-    local frac = math.max(0, math.min(1, (dur - (w.resetsAt - noctalia.nowMs())) / dur))
-    local delta = util - frac * 100
-    local status = util >= 100 and "over_quota" or delta >= M.PACE_MARGIN and "over"
-      or delta <= -M.PACE_MARGIN and "under" or "on"
-    p = { timeFrac = frac, delta = delta, status = status }
+  local now = noctalia.nowMs()
+  local p = { util = util }
+  if not w.resetsAt or w.resetsAt <= now then
+    p.status = util >= 100 and "limit" or "idle"
+    return p
   end
-  local vendor = w.severity == "critical" and "over_quota" or w.severity == "high" and "over" or nil
-  if vendor and M.SEVERITY[vendor] > M.SEVERITY[p.status] then p.status = vendor end
+  local dur = w.durationMs or 7 * M.DAY_MS
+  local remaining = w.resetsAt - now
+  local elapsed = math.max(0, math.min(dur, dur - remaining))
+  p.remainingMs, p.timeFrac = remaining, elapsed / dur
+  p.budget = math.max(0, 100 - util) / (remaining / M.HOUR_MS)
+  if util >= 100 then
+    p.status = "limit"
+    return p
+  end
+  local rate
+  if isSession(w) and w.rate then
+    rate, p.recent = w.rate, true
+  elseif elapsed >= MIN_ELAPSED[isSession(w) and "session" or "weekly"] then
+    rate = util / (elapsed / M.HOUR_MS)
+  end
+  if not rate then
+    p.status = util >= 85 and "tight" or "early"
+  else
+    p.rate = rate
+    p.projected = util + rate * remaining / M.HOUR_MS
+    if rate > 0 then
+      local eta = (100 - util) / rate * M.HOUR_MS
+      if eta < remaining then p.etaMs = eta end
+    end
+    local soon = isSession(w) and M.HOUR_MS or M.DAY_MS
+    if p.etaMs and p.etaMs < soon then p.status = "soon"
+    elseif p.etaMs and p.etaMs < remaining * 0.9 then p.status = "hit"
+    elseif p.projected >= 85 then p.status = "tight"
+    else p.status = "ok" end
+  end
+  local vendor = w.severity == "critical" and "soon" or w.severity == "high" and "tight" or nil
+  local rank = { idle = 0, early = 0, ok = 0, tight = 1, hit = 2, soon = 3, limit = 4 }
+  if vendor and rank[vendor] > rank[p.status] then p.status = vendor end
   return p
 end
 
-function M.paceLabel(p)
-  if p.status == "over_quota" then return "limit reached" end
-  if p.status == "over" then return `{M.round(p.delta)}% ahead of pace` end
-  if p.status == "under" then return `{M.round(-p.delta)}% under pace` end
-  if p.status == "on" then return "on pace" end
-  return nil
+-- "12%/h" for the 5-hour window, "14%/day" for weekly ones.
+function M.rateText(w, perHour)
+  if isSession(w) then return string.format("%.0f%%/h", perHour) end
+  return string.format("%.0f%%/day", perHour * 24)
 end
 
+-- Duration in ms as "2d 4h", "3h 10m" or "25m".
+function M.span(ms)
+  local m = math.max(0, math.floor(ms / 60000))
+  if m >= 1440 then return `{m // 1440}d {m % 1440 // 60}h` end
+  if m >= 60 then return `{m // 60}h {m % 60}m` end
+  return `{m}m`
+end
+
+-- Two lines for a window: what will happen, then when it resets and what you can spend.
+function M.paceText(w, p)
+  p = p or M.pace(w)
+  local resets = w.resetsAt and `resets in {M.countdown(w.resetsAt)} ({M.clock(w.resetsAt)})` or nil
+  if p.status == "idle" then return "No active window", "starts with your next message" end
+  if p.status == "limit" then return "Limit reached", resets end
+  local budget = p.budget and `{resets} · budget {M.rateText(w, p.budget)}` or resets
+  if p.status == "hit" or p.status == "soon" then
+    return `Limit in {M.span(p.etaMs)} at this rate ({M.clock(noctalia.nowMs() + p.etaMs)})`, budget
+  end
+  if not p.projected then return "Too early to project", budget end
+  local how = p.recent and "at the last hour's rate" or "at this rate"
+  return `On course for ~{M.round(math.min(p.projected, 999))}% by reset {how}`, budget
+end
+
+-- A few words for tight spaces (the Live strip): what happens next.
+function M.paceShort(w, p)
+  p = p or M.pace(w)
+  if p.status == "idle" then return "not started" end
+  if p.status == "limit" then return `full · resets {M.clock(w.resetsAt)}` end
+  if p.status == "hit" or p.status == "soon" then return `full by {M.clock(noctalia.nowMs() + p.etaMs)}` end
+  if not p.projected then return `resets in {M.countdown(w.resetsAt)}` end
+  return `~{M.round(math.min(p.projected, 999))}% by reset`
+end
+
+-- Red only when it is urgent; a limit days away is a warning, not an alarm.
 function M.paceColor(status, calm)
-  if status == "over_quota" then return "error" end
-  if status == "over" then return "tertiary" end
+  if status == "limit" or status == "soon" then return "error" end
+  if status == "hit" or status == "tight" then return "tertiary" end
   return calm
 end
 

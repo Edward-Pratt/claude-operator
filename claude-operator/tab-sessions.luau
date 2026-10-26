@@ -56,7 +56,13 @@ function M.load(ctx)
     data.loading = false
     local list = r.exitCode == 0 and noctalia.json.decode(r.stdout or "") or nil
     if type(list) == "table" then
+      local first = data.projects == nil
       data.projects = group(list)
+      -- First load: open the most recent project, so there is something to pick at once.
+      if first then
+        table.sort(data.projects, function(a, b) return a.last > b.last end)
+        if data.projects[1] then expanded[data.projects[1].cwd] = true end
+      end
     else
       data.error = "Could not list sessions" .. (r.timedOut and " (timed out)" or "")
     end
@@ -132,7 +138,8 @@ local function sessionRow(ctx, s, selected, isLive)
 
   local md = s.cwd .. "/CLAUDE.md"
   local buttons = kit.compact(
-    isLive and ui.glyph({ name = "activity", size = 14, color = "primary" }) or nil,
+    -- Fixed-width slot, so live and saved sessions line up.
+    ui.column({ width = 14, align = "center" }, { isLive and ui.glyph({ name = "activity", size = 14, color = "primary" }) or ui.spacer({}) }),
     ui.button({ text = s.label, variant = "ghost", contentAlign = "start", flexGrow = 1, controlSize = "sm",
       selected = selected, tooltip = s.empty and "Empty session: nothing to resume" or "Resume in a terminal",
       onClick = function() resume(ctx, s) end }),
@@ -172,7 +179,7 @@ local function groupHeader(ctx, g, count, selected, hasLive)
     hasLive and ui.glyph({ name = "activity", size = 14, color = "primary" }) or nil,
     ui.button({ text = basename(g.cwd), variant = "ghost", contentAlign = "start", flexGrow = 1, controlSize = "sm",
       fontSize = 13, tooltip = shared.projectPath(g.cwd), selected = selected, onClick = toggle }),
-    kit.muted(tostring(count), 11)
+    kit.muted(`{count} · {shared.ago(g.last)} ago`, 11)
   ))
 end
 

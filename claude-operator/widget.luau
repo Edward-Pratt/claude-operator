@@ -94,17 +94,15 @@ local function tooltip(waiting)
   if limits then
     row("Plan", shared.planName(limits.subscription, limits.tier))
     for _, w in ipairs(limits.windows or {}) do
-      local value = `{shared.round(w.percent)}%`
-      local left, at = shared.countdown(w.resetsAt), shared.clock(w.resetsAt)
-      if left then value = `{value}  ·  {left}` .. (at and ` ({at})` or "") end
-      row(w.label, value)
+      local headline = shared.paceText(w)
+      row(w.label, `{shared.round(w.percent)}%  ·  {headline}`)
     end
     if limits.stale then row("Limits", `updated {shared.ago(limits.updated)} ago` .. (limits.error and ` · {limits.error}` or "")) end
   end
   if type(usage) == "table" then
     local rates = type(pricing) == "table" and pricing.rates or nil
     row("Today", `{shared.tokens(usage.todayTokens)}  ({shared.money(usage.todayCost, rates)})`)
-    row("This week", `{shared.tokens(usage.weekTokens)}  ({shared.money(usage.weekCost, rates)})`)
+    row("7 days", `{shared.tokens(usage.d7Tokens)}  ({shared.money(usage.d7Cost, rates)})`)
   end
   return rows
 end
