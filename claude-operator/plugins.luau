@@ -41,6 +41,8 @@ local function outcomeMessage(result)
     if data and type(data.message) == "string" and data.message ~= "" then
         return data.message, data
     end
+    -- A success with nothing to say: the caller says "done".
+    if result.exitCode == 0 then return "", data end
     local err = (result.stderr or ""):match("[^\n]+")
     if err then return err, data end
     -- Nothing said: at least say how it ended.
