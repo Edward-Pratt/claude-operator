@@ -42,7 +42,6 @@ local lastSlow = -math.huge
 local recentPending, usagePending, pricingPending = false, false, false
 local usageAt = -math.huge
 local indexPending, indexAt = false, -math.huge
-local warned = {} -- window id .. reset time -> true once its "limit soon" notice went out
 
 local function cfg(key, fallback)
   local v = noctalia.getConfig(key)
@@ -209,9 +208,14 @@ local MIN_SPAN = { session = 30 * 60000, weekly = 3 * HOUR_MS }
 -- thinned to one per half hour (the newest wins), at most ~340 per window.
 local THIN = { session = 0, weekly = 30 * 60000 }
 
+-- The API's resets_at wobbles between fetches, so "same window" allows ten minutes.
+local function sameWindow(prev, w)
+  return prev ~= nil and prev.resetsAt ~= nil and w.resetsAt ~= nil and math.abs(prev.resetsAt - w.resetsAt) < 10 * 60000
+end
+
 local function addSample(w, prev, now)
   local kind = w.kind == "session" and "session" or "weekly"
-  local same = prev and prev.resetsAt and w.resetsAt and math.abs(prev.resetsAt - w.resetsAt) < 10 * 60000
+  local same = sameWindow(prev, w)
   local start = (w.resetsAt or now) - (w.durationMs or 7 * DAY_MS)
   local samples = {}
   for _, smp in ipairs(same and type(prev.samples) == "table" and prev.samples or {}) do
@@ -246,22 +250,28 @@ local function shapeLimits(raw, previous)
         percent = tonumber(w.percent), resetsAt = isoToMs(w.resets_at),
         durationMs = WINDOW_MS[w.kind] or 7 * DAY_MS, severity = w.severity,
       }
-      addSample(shaped, prevById[shaped.id], now)
+      local prev = prevById[shaped.id]
+      addSample(shaped, prev, now)
+      -- Saved with the limits, so a restart never repeats a window's notice.
+      if sameWindow(prev, shaped) then
+        shaped.warned = prev.warned
+        shaped.rose = shaped.percent > (tonumber(prev.percent) or 0)
+      end
       windows[#windows + 1] = shaped
     end
   end
   return { updated = now, stale = false, subscription = raw.subscription, tier = raw.tier, windows = windows }
 end
 
--- One notice per window and reset when the current rate reaches the limit within the hour
--- (5-hour window) or the day (weekly ones).
+-- One notice per window when the current rate reaches the limit within the hour (5-hour
+-- window) or the day (weekly ones), and only while usage is still rising: a weekly
+-- average can say "soon" for days after the last session.
 local function warnLimits(a)
   if not cfg("notify_limits", true) then return end
   for _, w in ipairs(a.limits.windows) do
     local p = shared.pace(w)
-    local key = `{a.dir}|{w.id}|{w.resetsAt or 0}`
-    if p.status == "soon" and not warned[key] then
-      warned[key] = true
+    if p.status == "soon" and w.rose and not w.warned then
+      w.warned = true
       local headline = shared.paceText(w, p)
       noctalia.notify(`Claude: {w.label} limit soon`, `{headline}. {w.label} is at {shared.round(w.percent)}%.`)
     end
@@ -291,8 +301,8 @@ local function fetchLimits(a)
     local err = nil
     if raw then
       a.limits = shapeLimits(raw, a.limits)
-      saveLimits()
       warnLimits(a)
+      saveLimits()
       a.limitsBackoff, a.limitsHold = nil, nil
     elseif r.exitCode == 4 then
       local wait = (tonumber(noctalia.string.trim(r.stdout or "")) or 0) * 1000

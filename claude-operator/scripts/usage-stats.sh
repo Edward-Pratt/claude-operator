@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # usage-stats.sh PRICING_JSON CACHE_DIR CONFIG_DIR...: token use and estimated cost from
-# the transcripts of the last 30 days, as the `usage` object in docs/DESIGN.md (without
-# `updated`). Days are local calendar days; "7 days" and "30 days" end today, so the chart
+# the transcripts, as the `usage` object in docs/DESIGN.md (without `updated`). Days are local calendar days; "7 days" and "30 days" end today, so the chart
 # is never a lone Monday bar. Assistant lines repeat once per content block, so each
 # message id + request id counts once (the last copy, which carries the final usage);
 # forked sessions copy messages into a new file, so that holds across files too.
 # Each transcript is reduced once per size, mtime and price-list date to one record per
-# message in CACHE_DIR, so a refresh re-reads only the transcripts that changed.
+# message in CACHE_DIR, so a refresh re-reads only the transcripts that changed. Claude
+# Code deletes transcripts after cleanupPeriodDays (30 by default), but their records stay
+# in CACHE_DIR: that is what the all-time total counts, from the first one seen.
 # The five costliest sessions of the last 7 days get their title and project.
 # Reads local files only: no network, no token. Replaces the counting half of
 # get-claude-usage (jrohland/noctalia-v5-claudecode via claude-cockpit, MIT).
@@ -43,31 +44,25 @@ reduce_file() {
     | .[]'
 }
 
-# Cached records of every transcript touched in the last 31 days; runs as one pipeline
-# stage, so `seen` and the cleanup at its end share a shell.
+# Brings the cache up to date with every transcript, then prints all cached records,
+# including those of transcripts Claude Code has since deleted. A record copied into
+# several files (forks, a config dir listed twice) is counted once by its key below.
 records() {
-  declare -A seen=()
   local i=0 cfg size mtime f name key entry
   for cfg in "$@"; do
     i=$((i + 1))
     [ -d "$cfg/projects" ] || continue
     while IFS=$'\t' read -r size mtime f; do
       name=${f#"$cfg/projects/"}; name="$i-${name//\//_}"
-      seen[$name]=1
       key="$size:$mtime:$priced:$SCHEMA"
       entry="$cache/$name"
-      if [ -f "$entry.key" ] && [ "$(< "$entry.key")" = "$key" ]; then
-        cat -- "$entry"
-      else
-        reduce_file "$f" > "$entry.tmp" && mv -f -- "$entry.tmp" "$entry" \
-          && printf '%s' "$key" > "$entry.key" && cat -- "$entry"
-        rm -f -- "$entry.tmp"
-      fi
-    done < <(find "$cfg/projects" -name '*.jsonl' -mtime -31 -printf '%s\t%T@\t%p\n' 2>/dev/null)
+      [ -f "$entry.key" ] && [ "$(< "$entry.key")" = "$key" ] && continue
+      reduce_file "$f" > "$entry.tmp" && mv -f -- "$entry.tmp" "$entry" && printf '%s' "$key" > "$entry.key"
+      rm -f -- "$entry.tmp"
+    done < <(find "$cfg/projects" -name '*.jsonl' -printf '%s\t%T@\t%p\n' 2>/dev/null)
   done
   for entry in "$cache"/*; do
-    [[ "$entry" == *.key ]] && continue
-    [ -n "${seen[${entry##*/}]:-}" ] || rm -f -- "$entry" "$entry.key"
+    [[ "$entry" == *.key || "$entry" == *.tmp ]] || cat -- "$entry"
   done
 }
 
@@ -86,6 +81,8 @@ records "$@" \
         todayTokens: ($tod | map(.tokens) | add // 0), todayCost: ($tod | map(.cost) | add // 0),
         d7Tokens: ($week | map(.tokens) | add // 0), d7Cost: ($week | map(.cost) | add // 0),
         d30Tokens: ($mon | map(.tokens) | add // 0), d30Cost: ($mon | map(.cost) | add // 0),
+        allTokens: ($all | map(.tokens) | add // 0), allCost: ($all | map(.cost) | add // 0),
+        allSince: ($all | map(.day | select(. != "1970-01-01")) | min // ""),
         d7Messages: ($week | length), d7Sessions: ($week | map(.session) | unique | length),
         d7Models: ($week | group_by(.model | split("-")[1] // .)
           | map({ key: (.[0].model | split("-")[1] // .), value: (map(.tokens) | add) })

@@ -70,6 +70,8 @@ elsewhere = [{ account, id, url, title, category, needs, detail, model, context,
                maxContext, mode, branch, since }]
 usage     = { updated, days = [7 weekday labels, today last], daily = [7], dailyCost = [7],
               todayTokens, todayCost, d7Tokens, d7Cost, d30Tokens, d30Cost,
+              allTokens, allCost, allSince,   -- all-time: every cached record, kept
+                                              -- after Claude Code deletes a transcript
               d7Messages, d7Sessions, d7Models = { [family] = tokens },
               topSessions = [{ id, cost, tokens, title, cwd }] }   -- rolling, ends today
 pricing   = { updated, rates = { GBP = 0.75, ... } }   -- for currency display

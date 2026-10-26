@@ -94,6 +94,14 @@ local function windowCard(w)
   return kit.card(rows, { gap = 6 })
 end
 
+-- "Since 11 Jul" from the all-time total's first day ("2026-07-11").
+local function sinceLabel(day)
+  local y, m, d = string.match(tostring(day or ""), "^(%d+)-(%d+)-(%d+)$")
+  if not y then return "All time" end
+  local t = os.time({ year = tonumber(y), month = tonumber(m), day = tonumber(d), hour = 12 })
+  return `Since {tonumber(d)} {os.date("%b", t)}`
+end
+
 local function metric(label, tokens, cost, rates)
   return ui.column({ gap = 2, align = "center", flexGrow = 1 }, {
     kit.muted(label, 11),
@@ -270,8 +278,10 @@ function M.render(ctx)
         metric("Today", u.todayTokens, u.todayCost, rates),
         metric("7 days", u.d7Tokens, u.d7Cost, rates),
         metric("30 days", u.d30Tokens, u.d30Cost, rates),
+        u.allCost and metric(sinceLabel(u.allSince), u.allTokens, u.allCost, rates) or nil,
       }),
-      kit.muted("What these tokens would cost at API prices; a subscription is billed flat.", 10),
+      kit.muted("What these tokens would cost at API prices; a subscription is billed flat. The all-time total "
+        .. "keeps counting after Claude Code deletes old transcripts (after 30 days by default).", 10, { maxLines = 3 }),
     })
     cards[#cards + 1] = dailyChart(ctx, u)
     local heat = heatCard(ctx, u)

@@ -116,8 +116,9 @@ you, a limit about to be hit, or how many lines are working.
   would hit the limit at this rate (or roughly where you will end up), the reset time, and
   the budget per hour or day that would last until the reset. The 5-hour window uses the
   last hour's rate once there is enough of it; weekly windows use their average so far,
-  after the first 6 hours. Then estimated cost and tokens for today, 7 days and 30 days,
-  the last 7 days day by day, a 30-day weekday-by-hour heatmap of when you use Claude,
+  after the first 6 hours. Then estimated cost and tokens for today, 7 days, 30 days and
+  all time (kept after Claude Code deletes old transcripts, so it grows from install), the
+  last 7 days day by day, a 30-day weekday-by-hour heatmap of when you use Claude,
   the five costliest sessions and the models used.
   ![Usage: forecast graphs for the 5-hour and weekly windows](images/usage.png)
   ![Usage: when you use Claude, costliest sessions, models](images/usage-insights.png)
