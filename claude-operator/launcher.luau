@@ -1,6 +1,7 @@
 --!nonstrict
 -- /co launcher provider: live sessions first (activate = jump to the terminal), then
--- Remote Control sessions elsewhere (open on claude.ai), then recent ones (resume).
+-- Remote Control sessions elsewhere (open on claude.ai), then recent ones (resume). Once
+-- you type, every saved session in the service's index is searched too (resume).
 -- Ported from claude-sessions (lfdominguez, MIT).
 local shared = require("./shared.luau")
 local GLYPH = { waiting = "bell-ringing", busy = "loader-2", idle = "circle-check" }
@@ -31,9 +32,21 @@ function onQuery(text)
     add("remote:" .. r.id, r, r.title, `{acct(r.account)}{r.category == "need_input" and "waiting" or "remote"} · elsewhere`,
       r.category == "need_input" and "bell-ringing" or "world", 900)
   end
+  local listed = {}
   for _, r in ipairs(noctalia.state.get("recent") or {}) do
+    listed[r.sessionId] = true
     add("recent:" .. r.sessionId, r, r.title ~= "" and r.title or r.prompt,
       `{acct(r.account)}resume · {shared.projectPath(r.cwd)} · {shared.ago(r.mtime)} ago`, "history", 0)
+  end
+  if q ~= "" then
+    for _, s in ipairs(noctalia.state.get("sessions") or {}) do listed[s.sessionId] = true end
+    for _, x in ipairs(noctalia.state.get("index") or {}) do
+      if not listed[x.id] and not x.empty and x.cwd ~= "" then
+        local title = x.title ~= "" and x.title or x.prompt
+        add("saved:" .. x.id, { account = x.account, cwd = x.cwd, sessionId = x.id }, title,
+          `{acct(x.account)}resume · {shared.projectPath(x.cwd)} · {shared.ago(x.mtime)} ago`, "archive", -100)
+      end
+    end
   end
   launcher.setResults(text, results)
 end

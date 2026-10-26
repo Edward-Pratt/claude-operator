@@ -27,7 +27,7 @@ local heldStep, repeatIn = 0, 0
 
 local S = {}
 local function loadState()
-  for _, k in ipairs({ "sessions", "recent", "accounts", "elsewhere", "usage", "pricing" }) do
+  for _, k in ipairs({ "sessions", "recent", "accounts", "elsewhere", "usage", "pricing", "index", "pins" }) do
     S[k] = noctalia.state.get(k)
   end
   S.sessions, S.recent, S.accounts, S.elsewhere = S.sessions or {}, S.recent or {}, S.accounts or {}, S.elsewhere or {}
@@ -107,7 +107,7 @@ ctx = {
   setTab = function(id) active = id; if BY_ID[id].mod.show then BY_ID[id].mod.show(ctx) end; render() end,
 }
 
-for _, k in ipairs({ "sessions", "recent", "accounts", "elsewhere", "usage", "pricing" }) do
+for _, k in ipairs({ "sessions", "recent", "accounts", "elsewhere", "usage", "pricing", "index", "pins" }) do
   noctalia.state.watch(k, function(v)
     if k == "sessions" or k == "recent" or k == "accounts" or k == "elsewhere" then v = v or {} end
     S[k] = v

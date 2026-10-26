@@ -54,9 +54,8 @@ end
 
 function M.show(ctx)
   if not data.paths then M.load(ctx) end
-  sessionsTab.show(ctx)
 end
-function M.refresh(ctx) M.load(ctx); sessionsTab.load(ctx) end
+function M.refresh(ctx) M.load(ctx); sessionsTab.refresh() end
 function M.busy() return data.loading end
 
 local function row(label, path, selected)
@@ -93,7 +92,7 @@ function M.render(ctx)
       end
     end
     local missing = {}
-    for _, g in ipairs(sessionsTab.projects() or {}) do
+    for _, g in ipairs(sessionsTab.projects(ctx) or {}) do
       local path = g.cwd .. "/CLAUDE.md"
       if string.sub(g.cwd, 1, 1) == "/" and not seen[path] and noctalia.fileExists(g.cwd) then
         seen[path] = true

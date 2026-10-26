@@ -307,8 +307,10 @@ local function countPill(g, n)
 end
 
 local function picker(ctx)
-  local seen, dirs = {}, {}
+  local seen, dirs, pinnedDir = {}, {}, {}
   local function add(d) if d and d ~= "" and not seen[d] then seen[d] = true; dirs[#dirs + 1] = d end end
+  -- Pinned projects first (pin them from the Sessions tab), then where you worked last.
+  for _, p in ipairs(type(ctx.S.pins) == "table" and ctx.S.pins or {}) do pinnedDir[p] = true; add(p) end
   for _, s in ipairs(ctx.S.sessions) do add(s.cwd) end
   for _, r in ipairs(ctx.S.recent) do add(r.cwd) end
   add(shared.workRoot())
@@ -322,7 +324,7 @@ local function picker(ctx)
       onHover = hoverHandler(ctx, key),
       onClick = function() shared.launch(d, shared.claudeArgv(nil)); ctx.close() end,
     }, {
-      ui.glyph({ name = "folder-plus", size = 14, color = "primary" }),
+      ui.glyph({ name = pinnedDir[d] and "pinned" or "folder-plus", size = 14, color = "primary" }),
       ui.label({ text = shared.projectPath(d), fontSize = 12, maxLines = 1, flexGrow = 1 }),
     })
   end

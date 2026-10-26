@@ -1,18 +1,15 @@
 --!nonstrict
--- Sessions tab: every saved session grouped by project. Filter, sort by date or name,
--- show only the empty ones (opened and closed before a prompt), resume, preview,
--- delete one, or delete every empty one. Loaded on show and on refresh, never polled;
--- scripts/list-sessions.sh caches each transcript's summary by size and mtime.
--- Ported from claude-cockpit's Sessions tab (nightwatch75, MIT).
+-- Sessions tab: every saved session grouped by project, pinned projects first. Filter,
+-- sort by date or name, show only the empty ones (opened and closed before a prompt),
+-- resume, preview, delete one, or delete every empty one. Renders the service's
+-- `index` and `pins`; refresh, pin and delete go back to the service as commands.
+-- After claude-cockpit's Sessions tab (nightwatch75, MIT).
 local shared = require("./shared.luau")
 local kit = require("./kit.luau")
 local M = {}
 M.nav = kit.nav()
 
-local SCRIPT = noctalia.pluginDir() .. "/scripts/list-sessions.sh"
-local CACHE = (noctalia.pluginDataDir() or "/tmp") .. "/sessions"
-
-local data = { loading = false, error = nil, projects = nil }
+local projects, groupedFrom = nil, nil -- grouped index, and the index it came from
 local search = ""
 local expanded = {} -- cwd -> true
 local preview = nil -- session id whose prompt preview is open
@@ -46,36 +43,34 @@ local function group(records)
   return order
 end
 
-function M.load(ctx)
-  if data.loading then return end
-  data.loading, data.error = true, nil
-  local argv = { "bash", SCRIPT, CACHE }
-  for _, a in ipairs(ctx.S.accounts) do argv[#argv + 1] = a.dir end
-  if #argv == 3 then argv[#argv + 1] = noctalia.expandPath("~/.claude") end
-  local started = noctalia.runAsync(argv, function(r)
-    data.loading = false
-    local list = r.exitCode == 0 and noctalia.json.decode(r.stdout or "") or nil
-    if type(list) == "table" then
-      local first = data.projects == nil
-      data.projects = group(list)
-      -- First load: open the most recent project, so there is something to pick at once.
-      if first then
-        table.sort(data.projects, function(a, b) return a.last > b.last end)
-        if data.projects[1] then expanded[data.projects[1].cwd] = true end
-      end
-    else
-      data.error = "Could not list sessions" .. (r.timedOut and " (timed out)" or "")
+-- The service's index, grouped once per new index (it changes every few minutes, the
+-- panel re-renders far more often).
+local function grouped(ctx)
+  local index = ctx.S.index
+  if type(index) ~= "table" then return nil end
+  if index ~= groupedFrom then
+    local first = projects == nil
+    projects, groupedFrom = group(index), index
+    -- First load: open the most recent project, so there is something to pick at once.
+    if first then
+      table.sort(projects, function(a, b) return a.last > b.last end)
+      if projects[1] then expanded[projects[1].cwd] = true end
     end
-    ctx.render()
-  end, 60000)
-  if not started then data.loading, data.error = false, "Could not start the session lister" end
-  ctx.render()
+  end
+  return projects
 end
 
-function M.show(ctx) if not data.projects then M.load(ctx) end end
-function M.projects() return data.projects end
-function M.refresh(ctx) M.load(ctx) end
-function M.busy() return data.loading end
+function M.projects(ctx) return ctx and grouped(ctx) or projects end
+function M.refresh() shared.requestRefresh("reindex") end
+
+local function pinned(ctx)
+  local set = {}
+  for _, p in ipairs(type(ctx.S.pins) == "table" and ctx.S.pins or {}) do set[p] = true end
+  return set
+end
+
+local function togglePin(cwd) noctalia.state.set("command", { action = "pin", cwd = cwd, at = noctalia.nowMs() }) end
+
 function M.closed() confirmDelete, confirmClean = nil, false end
 
 local function liveIds(ctx)
@@ -96,7 +91,7 @@ end
 
 local function deletableEmpty(ctx)
   local running, list = liveIds(ctx), {}
-  for _, g in ipairs(data.projects or {}) do
+  for _, g in ipairs(grouped(ctx) or {}) do
     for _, s in ipairs(g.sessions) do
       -- A running session has no prompt yet either; never pull its file away.
       if s.empty and not running[s.id] then list[#list + 1] = s end
@@ -116,7 +111,7 @@ local function cleanEmpty(ctx)
       if not ok then failed += 1 end
       if pending == 0 then
         if failed > 0 then noctalia.notifyError("Claude Operator", `{failed} empty sessions could not be deleted`) end
-        M.load(ctx)
+        M.refresh()
       end
     end)
   end
@@ -160,7 +155,7 @@ local function sessionRow(ctx, s, selected, isLive)
       delete(ctx, s, function(ok)
         confirmDelete = nil
         if not ok then noctalia.notifyError("Claude Operator", "Could not delete the session") end
-        M.load(ctx)
+        M.refresh()
       end)
     end, function() confirmDelete = nil; ctx.render() end)
   end
@@ -170,8 +165,7 @@ local function sessionRow(ctx, s, selected, isLive)
   return ui.column({ key = "sess-" .. s.id, gap = 3, align = "stretch", paddingH = 20 }, blocks)
 end
 
-local function groupHeader(ctx, g, count, selected, hasLive)
-  local open = expanded[g.cwd] == true
+local function groupHeader(ctx, g, count, selected, hasLive, isPinned, open)
   local function toggle() expanded[g.cwd] = not open; ctx.render() end
   return ui.row({ key = "grp-" .. g.cwd, gap = 8, align = "center", onClick = toggle }, kit.compact(
     ui.glyph({ name = open and "chevron-down" or "chevron-right", size = 14, color = "on_surface_variant" }),
@@ -180,7 +174,10 @@ local function groupHeader(ctx, g, count, selected, hasLive)
     ui.button({ text = basename(g.cwd), variant = "ghost", contentAlign = "start", flexGrow = 1, controlSize = "sm",
       fontSize = 13, tooltip = shared.projectPath(g.cwd), selected = selected, onClick = toggle }),
     -- Minutes at most: this tab does not re-render every second.
-    kit.muted(`{count} · {noctalia.nowMs() - g.last < 60000 and "just now" or shared.ago(g.last) .. " ago"}`, 11)
+    kit.muted(`{count} · {noctalia.nowMs() - g.last < 60000 and "just now" or shared.ago(g.last) .. " ago"}`, 11),
+    string.sub(g.cwd, 1, 1) == "/" and kit.iconButton(isPinned and "pinned" or "pin",
+      isPinned and "Unpin project" or "Pin to the top, and to New session", function() togglePin(g.cwd) end,
+      { selected = isPinned }) or nil
   ))
 end
 
@@ -205,7 +202,7 @@ end
 
 function M.render(ctx)
   local emptyCount = 0
-  for _, g in ipairs(data.projects or {}) do
+  for _, g in ipairs(grouped(ctx) or {}) do
     for _, s in ipairs(g.sessions) do if s.empty then emptyCount += 1 end end
   end
   local deletable = #deletableEmpty(ctx)
@@ -214,7 +211,7 @@ function M.render(ctx)
       ui.input({ key = "sess-search", value = search, placeholder = "Filter by title, prompt or path", flexGrow = 1,
         onChange = function(v) search = v; M.nav:reset(); ctx.render() end }),
       kit.iconButton("chevrons-down", "Expand all", function()
-        for _, g in ipairs(data.projects or {}) do expanded[g.cwd] = true end
+        for _, g in ipairs(grouped(ctx) or {}) do expanded[g.cwd] = true end
         ctx.render()
       end),
       kit.iconButton("chevrons-up", "Collapse all", function() expanded = {}; M.nav:reset(); ctx.render() end),
@@ -235,15 +232,15 @@ function M.render(ctx)
   end
 
   M.nav:begin()
-  if data.error then
-    rows[#rows + 1] = ui.label({ text = data.error, color = "error" })
-  elseif not data.projects then
+  local all = grouped(ctx)
+  if not all then
     rows[#rows + 1] = kit.muted("Reading sessions…")
   else
+    local pins = pinned(ctx)
     local needle = string.lower(noctalia.string.trim(search))
     local running = liveIds(ctx)
     local shown = {}
-    for _, g in ipairs(data.projects) do
+    for _, g in ipairs(all) do
       local matches = {}
       for _, s in ipairs(g.sessions) do
         local hit = needle == "" or string.find(string.lower(s.label), needle, 1, true)
@@ -255,7 +252,12 @@ function M.render(ctx)
         shown[#shown + 1] = { g = g, matches = matches }
       end
     end
-    table.sort(shown, sorter(function(e) return sortBy == "name" and string.lower(basename(e.g.cwd)) or e.g.last end))
+    local bySort = sorter(function(e) return sortBy == "name" and string.lower(basename(e.g.cwd)) or e.g.last end)
+    table.sort(shown, function(a, b)
+      local pa, pb = pins[a.g.cwd] == true, pins[b.g.cwd] == true
+      if pa ~= pb then return pa end
+      return bySort(a, b)
+    end)
     for _, e in ipairs(shown) do
       local g = e.g
       local hasLive = false
@@ -263,7 +265,7 @@ function M.render(ctx)
       -- While filtering, every matching project is open.
       local open = expanded[g.cwd] == true or needle ~= ""
       local sel = M.nav:add("grp-" .. g.cwd, function() expanded[g.cwd] = not expanded[g.cwd]; ctx.render() end)
-      rows[#rows + 1] = groupHeader(ctx, g, #e.matches, sel, hasLive)
+      rows[#rows + 1] = groupHeader(ctx, g, #e.matches, sel, hasLive, pins[g.cwd] == true, open)
       if open then
         for _, s in ipairs(e.matches) do
           rows[#rows + 1] = sessionRow(ctx, s, M.nav:add("sess-" .. s.id, function() resume(ctx, s) end), running[s.id] == true)
