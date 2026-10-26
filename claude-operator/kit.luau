@@ -22,7 +22,7 @@ end
 function M.heading(text) return ui.label({ text = text, fontSize = 14, fontWeight = "medium" }) end
 
 function M.card(children, props)
-  local p = { gap = 8, padding = 14, fill = "surface_variant/0.45", radius = 12, align = "stretch" }
+  local p = { gap = 8, padding = 14, fill = "surface_container", radius = 12, align = "stretch" }
   for k, v in pairs(props or {}) do p[k] = v end
   return ui.column(p, children)
 end

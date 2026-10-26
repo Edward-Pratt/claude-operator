@@ -22,6 +22,7 @@ Claude Operator merges [claude-cockpit](https://github.com/noctalia-dev/communit
 
 ## Requirements
 
+- Noctalia 5.4.0 or newer (`plugin_api = 43`).
 - Claude Code 2.1 or newer, logged in. It writes the per-session state files this
   plugin reads, and its OAuth token gives the plan limits.
 - `claude` itself, found on `PATH` or in `~/.local/bin`, for resuming sessions and the

@@ -3,8 +3,9 @@
 claude-operator merges nightwatch75/claude-cockpit and lfdominguez/claude-sessions
 (both MIT) into one plugin. See `RESEARCH.md` for what each did and what was broken.
 
-Target: noctalia 5.3.0, `plugin_api = 33`. Treat anything the API types mark 34+ as
-unavailable until tested.
+Target: noctalia 5.4.0, `plugin_api = 43`, for the `surface_container` / `outline_variant`
+colour roles; `surface_variant` and `outline` are retired (aliased with a warning until
+5.5.0, rejected by community CI).
 
 ## Layout
 
