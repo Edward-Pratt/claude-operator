@@ -21,7 +21,7 @@ dependencies = [
   "tr", "cut", "xargs", "date", "basename", "dirname", "readlink", "cat", "mkdir", "mv", "rm",
   "pgrep", "kill", "xdg-open", "claude",
 ]
-tags = ["ai", "development", "bar", "panel", "launcher", "service", "productivity"]
+tags = ["ai", "development", "bar", "desktop", "panel", "launcher", "service", "productivity"]
 icon = "headset"
 description = "Live Claude Code sessions, plan limits and cost on the bar; jump to, resume and manage every session."
 

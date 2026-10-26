@@ -82,10 +82,11 @@ end
 -- Deletes the transcript and its subagent dir. Only a path inside a known account's
 -- projects dir, named after a session id, is ever passed to rm.
 local function delete(ctx, s, done)
-  local ok = string.match(s.id, "^[%x-]+$") and string.sub(s.path, 1, #s.account + 10) == s.account .. "/projects/"
-    and string.sub(s.path, -#s.id - 6) == s.id .. ".jsonl"
+  local path = shared.transcript(s.account, s.cwd, s.id)
+  local ok = string.match(s.id, "^[%x-]+$") and string.sub(path, 1, #s.account + 10) == s.account .. "/projects/"
+    and noctalia.fileExists(path)
   if not ok then done(false) return end
-  local started = noctalia.runAsync({ "rm", "-rf", "--", s.path, string.sub(s.path, 1, -7) }, function(r) done(r.exitCode == 0) end)
+  local started = noctalia.runAsync({ "rm", "-rf", "--", path, string.sub(path, 1, -7) }, function(r) done(r.exitCode == 0) end)
   if not started then done(false) end
 end
 

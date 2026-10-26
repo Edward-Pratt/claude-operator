@@ -72,8 +72,8 @@ usage     = { updated, days = [7 weekday labels, today last], daily = [7], daily
               d7Messages, d7Sessions, d7Models = { [family] = tokens },
               topSessions = [{ id, cost, tokens, title, cwd }] }   -- rolling, ends today
 pricing   = { updated, rates = { GBP = 0.75, ... } }   -- for currency display
-index     = [{ account, id, path, cwd, branch, mtime, title, prompt, model, context,
-               empty }]                                -- every saved session, newest first
+index     = [{ account, id, cwd, branch, mtime, title, prompt, model, context,
+               empty }]       -- every saved session, newest first; ~190 KB for 490
 pins      = [cwd]                                      -- pinned projects
 command   = { action = "refresh" | "open" | "reindex" | "pin", cwd?, at }  -- UI -> service
 ```

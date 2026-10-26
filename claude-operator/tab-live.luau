@@ -118,7 +118,8 @@ local function preview(s, d)
     rows[#rows + 1] = ui.markdown({ text = d.reply .. (d.replyCut and "\n\n*…cut short; open the transcript for the rest*" or "") })
   end
   if #rows == 0 then rows[1] = kit.muted("No reply yet", 11) end
-  return ui.column({ gap = 6, padding = 10, radius = 8, fill = "on_surface/0.05" }, rows)
+  -- Its own (empty) click target, so reading or clicking the reply does not jump away.
+  return ui.column({ gap = 6, padding = 10, radius = 8, fill = "on_surface/0.05", onClick = function() end }, rows)
 end
 
 local function whereRow(cwd, branch, actions)

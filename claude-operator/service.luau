@@ -263,7 +263,7 @@ local function warnLimits(a)
     if p.status == "soon" and not warned[key] then
       warned[key] = true
       local headline = shared.paceText(w, p)
-      noctalia.notify(`Claude {w.label} limit close`, `{headline}. {w.label} is at {shared.round(w.percent)}%.`)
+      noctalia.notify(`Claude: {w.label} limit soon`, `{headline}. {w.label} is at {shared.round(w.percent)}%.`)
     end
   end
 end
@@ -600,8 +600,10 @@ local function refreshIndex()
       noctalia.log("claude-operator: session index failed: " .. noctalia.string.trim(r.stderr or ""))
       return
     end
+    -- Published to every entry: ~190 KB for 490 sessions. The transcript path is left
+    -- out (the UI derives it from account, cwd and id), as is the size.
     for _, x in ipairs(list) do
-      x.size = nil
+      x.size, x.path = nil, nil
       if #x.prompt > 160 then x.prompt = string.sub(x.prompt, 1, 160) .. "…" end
     end
     table.sort(list, function(x, y) return x.mtime > y.mtime end)
