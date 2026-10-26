@@ -22,7 +22,7 @@ Claude Operator merges [claude-cockpit](https://github.com/noctalia-dev/communit
 | Field | Value |
 | --- | --- |
 | ID | `edward/claude-operator` |
-| Entries | Bar widget: `widget`; desktop widget: `desktop`; panel: `panel`; service: `service`; launcher provider: `search` |
+| Entries | Bar widget: `widget`; desktop widget: `desktop`; panels: `panel` (attached), `floating`; service: `service`; launcher provider: `search` |
 | Launcher Prefix | `/co` |
 
 ## Requirements
@@ -85,8 +85,11 @@ today and the last 7 days. Click it to open the panel.
 ### Panel
 
 ```sh
-noctalia msg panel-toggle edward/claude-operator:panel
+noctalia msg panel-toggle edward/claude-operator:panel      # attached to the bar
+noctalia msg panel-toggle edward/claude-operator:floating   # floating, centred
 ```
+
+The bar widget opens the attached one, or the floating one with **Floating panel** on.
 
 The header always leads with the most urgent thing on the board: a session that needs
 you, a limit about to be hit, or how many lines are working.
@@ -172,6 +175,7 @@ the first five lines (click one to jump to its terminal) and the status line.
 | `terminal` | `string` | empty | Terminal for new and resumed sessions, e.g. `ghostty`. Empty opens a kitty tab when kitty remote control is on, else Noctalia's terminal. |
 | `editor_command` | `string` | empty | Command that opens a CLAUDE.md. Empty tries `code`, then `zed`. |
 | `work_root` | `folder` | empty | Project paths under this folder are shown relative to it. |
+| `floating_panel` | `bool` | `false` | The widget opens the panel floating in the middle of the screen instead of attached to the bar. |
 | `glyph` | `glyph` | `headset` | Bar widget glyph. |
 | `bar_style` | `select` | `dots` | `dots`: one dot per session. `counts`: waiting count, then busy/total. |
 | `bar_limits` | `select` | `5h_7d` | Windows on the bar: `5h`, `7d`, `5h_7d`, `all` (includes per-model weeks such as Fable) or `none`. |
@@ -184,6 +188,7 @@ the first five lines (click one to jump to its terminal) and the status line.
 noctalia msg plugin edward/claude-operator:service all refresh
 
 # Switch the panel to a tab: live, usage, sessions, claudemd or plugins
+# (use edward/claude-operator:floating for the floating panel)
 noctalia msg plugin edward/claude-operator:panel all tab sessions
 
 # Toggle the panel from the widget on the focused output (for a keybind)
