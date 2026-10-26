@@ -52,11 +52,19 @@ local function logFailure(args, message)
     noctalia.log(`claude-operator: claude plugin {table.concat(args, " ")}: {message}`)
 end
 
-local function runCli(args, done)
-    local argv = { shared.claudeBin() or "claude", "plugin" }
+-- `claude plugin <args>` with stdin on /dev/null. noctalia's own stdin is whatever it
+-- was started from (a login tty, when launched from a console), and claude waits for
+-- input there until it closes, so every listing would hang until the timeout.
+local function cliArgv(args)
+    local argv = { "bash", "-c", 'exec "$@" </dev/null', "bash", shared.claudeBin() or "claude", "plugin" }
     for _, a in ipairs(args) do
         table.insert(argv, a)
     end
+    return argv
+end
+
+local function runCli(args, done)
+    local argv = cliArgv(args)
     local ok = noctalia.runAsync(argv, function(result)
         if type(result) ~= "table" then
             done(false, "")
@@ -199,9 +207,8 @@ function M.refresh(done)
         end
     end
 
-    local function listJson(argv, field)
-        local args = { table.unpack(argv, 2) }
-        local ok = noctalia.runAsync(argv, function(result)
+    local function listJson(args, field)
+        local ok = noctalia.runAsync(cliArgv(args), function(result)
             local data = type(result) == "table" and result.exitCode == 0 and noctalia.json.decode(result.stdout or "")
             if type(data) ~= "table" then
                 local why = type(result) ~= "table" and "no result"
@@ -219,8 +226,8 @@ function M.refresh(done)
         end
     end
 
-    listJson({ shared.claudeBin(), "plugin", "list", "--json" }, "plugins")
-    listJson({ shared.claudeBin(), "plugin", "marketplace", "list", "--json" }, "marketplaces")
+    listJson({ "list", "--json" }, "plugins")
+    listJson({ "marketplace", "list", "--json" }, "marketplaces")
 
     -- A missing ~/.claude/skills is just "no local skills", not an error.
     local ok = noctalia.runAsync({
