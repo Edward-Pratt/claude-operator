@@ -8,6 +8,11 @@ saved session, forecast your limits, see when and where your usage goes, and man
 CLAUDE.md files and Claude Code plugins. A desktop widget puts the board on a second
 monitor.
 
+![The Live tab: two sessions working, plan limits and where they are heading](images/live.png)
+
+*The Live tab: each running session is a numbered line with its lamp, current tool, last
+prompt, cost and last hour.*
+
 Claude Operator merges [claude-cockpit](https://github.com/noctalia-dev/community-plugins/tree/main/claude-cockpit)
 (nightwatch75) and [claude-sessions](https://github.com/noctalia-dev/community-plugins/tree/main/claude-sessions)
 (lfdominguez) into one plugin with one data service, and fixes several bugs they had.
@@ -57,6 +62,8 @@ Claude Operator merges [claude-cockpit](https://github.com/noctalia-dev/communit
 
 ### Bar widget
 
+![Bar widget: two lamps and the nested gauge](images/bar.png)
+
 Add **Claude Operator** from the bar's widget picker. It shows:
 
 - The glyph, which turns into a red bell while a session waits for a permission or an
@@ -88,7 +95,8 @@ you, a limit about to be hit, or how many lines are working.
   *Idle*. Each session is a numbered line (`L1`, `L2`…) with a lamp down its edge that
   blinks while it needs you. A card shows the title, folder and branch, the tool it is
   running or what it waits for, todo progress, your last prompt, chips for terminal,
-  model, permission mode, context use, cost, subagents and last turn time, and a strip of
+  model, permission mode, context use, cost, subagents, helpers (Claude sessions started
+  from inside this one, such as a hook's review run) and last turn time, and a strip of
   its last hour (working, waiting, idle). The chevron opens Claude's last reply, rendered,
   and the questions of a pending AskUserQuestion, so you can see what it wants without
   switching windows. Click a card to jump to its terminal. Hover it, or select it with the keyboard, for its actions: open on claude.ai
@@ -97,6 +105,8 @@ you, a limit about to be hit, or how many lines are working.
   Control sessions on other machines. *Recent* lists closed sessions to resume.
   **New session** starts Claude in a pinned or recent project. Click the limits strip to
   open Usage.
+  ![A card opened to show Claude's last reply](images/live-preview.png)
+
 - **Usage**: each plan window as a forecast graph: usage so far, then (faint) where the
   current rate takes it by the reset, against an even-pace line to 100%. Under it: when you
   would hit the limit at this rate (or roughly where you will end up), the reset time, and
@@ -105,19 +115,29 @@ you, a limit about to be hit, or how many lines are working.
   after the first 6 hours. Then estimated cost and tokens for today, 7 days and 30 days,
   the last 7 days day by day, a 30-day weekday-by-hour heatmap of when you use Claude,
   the five costliest sessions and the models used.
+  ![Usage: forecast graphs for the 5-hour and weekly windows](images/usage.png)
+  ![Usage: when you use Claude, costliest sessions, models](images/usage-insights.png)
+
 - **Sessions**: every saved session, grouped by project (worktrees read as
-  `repo › worktree`), pinned projects first. Filter by title, prompt or path, sort by date
+  `repo › worktree`), pinned projects first. Runs started through the Agent SDK (a hook
+  or script calling `claude`) are left out, here and in Recent and the launcher. Filter by title, prompt or path, sort by date
   or name, show only empty sessions. The pin on a project keeps it at the top here and in
   **New session**. Click a session to resume it. Each row can open or create the
   project's CLAUDE.md, preview the prompt, or delete the session. The bin button deletes
   every empty session; running ones are always kept.
+  ![Sessions: a project opened, with pin, CLAUDE.md, preview and delete per row](images/sessions.png)
+
 - **Memory**: the global `~/.claude/CLAUDE.md`, every CLAUDE.md under your home folder,
   and a row to create one for each project that has sessions but no file.
+  ![Memory: every CLAUDE.md, and projects without one](images/memory.png)
+
 - **Plugins**: installed Claude Code plugins by marketplace, plus bare skill folders in
   `~/.claude/skills`. Enable, disable, update or uninstall a plugin; refresh or remove a
   marketplace; **Check updates** marks newer versions without installing them. The
   install box takes `plugin@marketplace`, `owner/repo`, a git URL or a path. Restart
   Claude Code to apply plugin changes.
+
+  ![Plugins: marketplaces, plugins and the install box](images/plugins.png)
 
 Keys: `↑` / `↓` select a card or row (hold to repeat), `Return` activates it, `Esc`
 closes. Letters always go to the text fields.
