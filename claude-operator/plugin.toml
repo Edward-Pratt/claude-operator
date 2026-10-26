@@ -6,7 +6,7 @@
 
 id = "edward/claude-operator"
 name = "Claude Operator"
-version = "0.5.0"
+version = "0.5.1"
 # 43 (noctalia 5.4): the surface_container / outline_variant color roles that replace
 # surface_variant / outline.
 # 33: revealKey on ui.scroll (session browser keeps the selection in view).
@@ -142,15 +142,6 @@ label_key = "settings.work_root.label"
 description_key = "settings.work_root.description"
 default = ""
 
-# Open the panel as a floating window in the middle of the screen instead of attached
-# to the bar. Both are declared below; the widget opens the one this picks.
-[[setting]]
-key = "floating_panel"
-type = "bool"
-label_key = "settings.floating_panel.label"
-description_key = "settings.floating_panel.description"
-default = false
-
 [[service]]
 id = "service"
 entry = "service.luau"
@@ -158,6 +149,9 @@ entry = "service.luau"
 [[widget]]
 id = "widget"
 entry = "widget.luau"
+
+[widget.actions]
+  left = "panel-toggle edward/claude-operator:panel"
 
   [[widget.setting]]
   key = "glyph"
@@ -217,19 +211,10 @@ width = 700
 height = 720
 # Only navigation keys: letters stay with the session browser's filter input.
 capture_keys = ["up", "down", "Return", "KP_Enter"]
+# The default only: noctalia's own Placement / Position / Layer settings for this panel
+# (Settings > Plugins) let each user float it instead.
 placement = "attached"
 open_near_click = true
-dismiss_on_outside_click = true
-
-# The same panel, floating in the middle of the screen (setting floating_panel).
-[[panel]]
-id = "floating"
-entry = "panel.luau"
-width = 700
-height = 720
-capture_keys = ["up", "down", "Return", "KP_Enter"]
-placement = "floating"
-position = "center"
 dismiss_on_outside_click = true
 
 [[launcher_provider]]

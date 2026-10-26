@@ -94,10 +94,6 @@
     "notify_limits": {
       "label": "Warn before a limit",
       "description": "Notify once per window when the current rate reaches the 5-hour limit within the hour, or a weekly limit within a day."
-    },
-    "floating_panel": {
-      "label": "Floating panel",
-      "description": "Open the panel as a floating window in the middle of the screen instead of attached to the bar."
     }
   }
 }

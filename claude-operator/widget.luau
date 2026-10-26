@@ -2,8 +2,7 @@
 -- Bar widget, the switchboard at a glance: a lamp per live session (red needs you and
 -- blinks, accent working, dim idle) and one nested gauge for the plan windows (5h inside
 -- 7d, faint arc = where the current rate takes each by the reset), then their numbers.
--- Renders published state only. A left click opens the attached or the floating panel,
--- per the floating_panel setting (a [widget.actions] binding still wins if the user sets one).
+-- Renders published state only; left click is a [widget.actions] default in plugin.toml.
 local shared = require("./shared.luau")
 local gauge = require("./gauge.luau")
 
@@ -134,9 +133,8 @@ noctalia.state.watch("usage", function(v) usage = v; render() end)
 noctalia.state.watch("pricing", function(v) pricing = v; render() end)
 noctalia.state.watch("panel_open", function(v) open = v == true; render() end)
 function onConfigChanged() render() end
-function onClick() shared.togglePanel() end
 -- `noctalia msg plugin edward/claude-operator:widget focused click` toggles the panel.
-function onIpc(event) if event == "click" then shared.togglePanel() end end
+function onIpc(event) if event == "click" then noctalia.togglePanel("edward/claude-operator:panel") end end
 function update()
   blinkOff = not blinkOff
   render()

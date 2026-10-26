@@ -349,13 +349,6 @@ function M.openInEditor(path)
   return noctalia.runAsync(argv)
 end
 
--- The panel the widget opens: attached to the bar, or floating (setting floating_panel).
--- Both entries run panel.luau.
-function M.togglePanel()
-  noctalia.togglePanel(noctalia.getConfig("floating_panel") == true and "edward/claude-operator:floating"
-    or "edward/claude-operator:panel")
-end
-
 -- Ask the service to refresh everything now (the panel's refresh button).
 function M.requestRefresh(action)
   noctalia.state.set("command", { action = action or "refresh", at = noctalia.nowMs() })
