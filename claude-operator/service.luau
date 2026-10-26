@@ -119,6 +119,7 @@ local function addAccount(dir)
   dir = normDir(dir)
   if not dir or accounts[dir] or not noctalia.fileExists(dir) then return false end
   local saved = savedLimits[dir]
+  if type(saved) == "table" then saved.stale = true end
   accounts[dir] = {
     dir = dir, label = labelFor(dir),
     -- Last known limits survive a restart; marked stale until the next fetch lands.
@@ -243,6 +244,7 @@ local function refreshPricing(done)
   if url == "" then url = "https://api.frankfurter.dev/v1/latest" end
   local started = noctalia.runAsync(script("pricing.sh", PRICING, url), function(r)
     pricingPending = false
+    for _, d in pairs(details) do d.key = nil end
     if r.exitCode ~= 0 then noctalia.log("claude-operator: pricing refresh failed: " .. noctalia.string.trim(r.stderr or "")) end
     publishPricing()
     done()
@@ -344,7 +346,7 @@ local function alive(s)
   local stat = noctalia.readFile("/proc/" .. tostring(s.pid) .. "/stat")
   if not stat then return false end
   if not s.procStart then return true end
-  local rest = string.match(stat, "^.*%) (.*)$") or ""
+  local rest = string.match(stat, "^.*%)%s*(.*)$") or ""
   local i = 3 -- the remainder starts at field 3 (state); comm may hold spaces or parens
   for field in string.gmatch(rest, "%S+") do
     if i == 22 then return field == tostring(s.procStart) end
@@ -353,8 +355,23 @@ local function alive(s)
   return false
 end
 
-local function transcript(s)
-  return `{s.account}/projects/{(string.gsub(s.cwd, "[^%w]", "-"))}/{s.sessionId}.jsonl`
+-- Claude Code files a transcript under the dir the session started in, encoded; a
+-- session that later moved (cd, worktree) has a cwd that no longer matches, so a miss
+-- falls back to one search by session id, remembered for the session's lifetime.
+local function findTranscript(s, d)
+  if d.path and noctalia.fileExists(d.path) then return d.path end
+  local guess = `{s.account}/projects/{(string.gsub(s.cwd, "[^%w]", "-"))}/{s.sessionId}.jsonl`
+  if noctalia.fileExists(guess) then d.path = guess return guess end
+  if not d.searching and s.sessionId:match("^[%x-]+$") then
+    d.searching = true
+    noctalia.runAsync({ "find", s.account .. "/projects", "-mindepth", "2", "-maxdepth", "2",
+      "-name", s.sessionId .. ".jsonl", "-print", "-quit" }, function(r)
+      d.searching = false
+      local found = string.match(r.stdout or "", "[^\n]+")
+      if found then d.path = found end
+    end, 10000)
+  end
+  return nil
 end
 
 local function publishSessions()
@@ -367,11 +384,14 @@ end
 
 -- details.sh re-runs only when the transcript's size or mtime changed.
 local function refreshDetails(s)
-  local path = transcript(s)
-  local info = noctalia.fileInfo(path)
-  if not info then return end
+  -- Without prices the cost and context window would be cached wrong until the
+  -- transcript next changes; refreshPricing re-queues every session when it lands.
+  if not noctalia.fileExists(PRICING) then return end
   local d = details[s.pid] or {}
   details[s.pid] = d
+  local path = findTranscript(s, d)
+  local info = path and noctalia.fileInfo(path)
+  if not info then return end
   local key = `{info.size}:{info.mtime}`
   if d.pending or d.key == key then return end
   d.pending = true
@@ -530,7 +550,10 @@ noctalia.state.watch("command", function(v)
   end
 end)
 function update() poll() end
-function onIpc(event) if event == "refresh" then refreshAll() end end
+function onIpc(event)
+  if event == "refresh" then refreshAll() end
+  if event == "dump" then noctalia.writeFile(DATA .. "/dump.json", noctalia.json.encode({ sessions = current, recent = noctalia.state.get("recent"), usage = noctalia.state.get("usage"), elsewhere = noctalia.state.get("elsewhere") })) end -- DEBUG
+end
 function onConfigChanged() refreshAll() end
 
 noctalia.mkdirAll(DATA)

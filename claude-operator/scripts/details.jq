@@ -10,7 +10,7 @@ def oneline: gsub("\\s+"; " ") | .[0:160];
 | {
     title: (lastof(.type == "ai-title") | .aiTitle),
     mode: (lastof(.type == "permission-mode") | .permissionMode),
-    branch: (lastof((.gitBranch // "") != "") | .gitBranch),
+    branch: (lastof((.gitBranch // "") != "") | .gitBranch | if . == "HEAD" then null else . end),
     model: ($model | if . then sub("^claude-"; "") else . end),
     # What fills the window: everything sent in, not what came back.
     context: ($a.message.usage | if . then (.input_tokens // 0) + (.cache_creation_input_tokens // 0) + (.cache_read_input_tokens // 0) else null end),
