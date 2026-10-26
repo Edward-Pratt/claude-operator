@@ -88,12 +88,26 @@ local function tabBar()
   return ui.row({ gap = 4, align = "center" }, buttons)
 end
 
+-- A tab that throws would otherwise leave its last screen up (often "loading"), with
+-- the error only in the log. Show it instead, and log each distinct one once.
+local lastTabError = nil
+local function tabBody()
+  local ok, body = pcall(BY_ID[active].mod.render, ctx)
+  if ok then return body end
+  local message = tostring(body)
+  if message ~= lastTabError then
+    lastTabError = message
+    noctalia.log(`claude-operator: {active} tab: {message}`)
+  end
+  return kit.notice("alert-triangle", `This tab hit an error: {message}`, "error")
+end
+
 render = function()
   if not isOpen then return end
   panel.render(ui.column({ flexGrow = 1, gap = 12, align = "stretch" }, {
     header(),
     tabBar(),
-    BY_ID[active].mod.render(ctx),
+    tabBody(),
   }))
 end
 

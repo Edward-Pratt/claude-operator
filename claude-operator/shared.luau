@@ -263,11 +263,13 @@ end
 
 function M.quote(s) return "'" .. string.gsub(s, "'", "'\\''") .. "'" end
 
--- The claude binary. Noctalia's environment often lacks ~/.local/bin, where the native
--- installer puts it, so look there and in the older ~/.claude/local before giving up.
+-- The claude binary. Noctalia's environment often lacks the user's shell PATH, so look
+-- where the installers put it: native (~/.local/bin), the older local install
+-- (~/.claude/local), npm with a user prefix (~/.npm-global/bin), bun, and /usr/local.
 function M.claudeBin()
   if noctalia.commandExists("claude") then return "claude" end
-  for _, p in ipairs({ HOME .. "/.local/bin/claude", HOME .. "/.claude/local/claude" }) do
+  for _, p in ipairs({ HOME .. "/.local/bin/claude", HOME .. "/.claude/local/claude",
+    HOME .. "/.npm-global/bin/claude", HOME .. "/.bun/bin/claude", "/usr/local/bin/claude" }) do
     if noctalia.fileExists(p) then return p end
   end
   return nil

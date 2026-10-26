@@ -40,7 +40,16 @@ local function outcomeMessage(result)
     if type(data) == "table" and type(data.message) == "string" and data.message ~= "" then
         return data.message
     end
-    return (result.stderr or ""):match("[^\n]+") or ""
+    local err = (result.stderr or ""):match("[^\n]+")
+    if err then return err end
+    -- Nothing said: at least say how it ended.
+    if result.timedOut then return "timed out" end
+    return result.exitCode == 127 and "claude not found" or `exit {result.exitCode}`
+end
+
+-- Logged with the command, so a failure on someone else's machine can be traced.
+local function logFailure(args, message)
+    noctalia.log(`claude-operator: claude plugin {table.concat(args, " ")}: {message}`)
 end
 
 local function runCli(args, done)
@@ -53,10 +62,13 @@ local function runCli(args, done)
             done(false, "")
             return
         end
-        done(result.exitCode == 0, trim(outcomeMessage(result)))
+        local message = trim(outcomeMessage(result))
+        if result.exitCode ~= 0 then logFailure(args, message) end
+        done(result.exitCode == 0, message)
     end, CLI_TIMEOUT)
     if not ok then
-        done(false, "")
+        logFailure(args, "could not start")
+        done(false, "could not start claude")
     end
 end
 
@@ -188,17 +200,22 @@ function M.refresh(done)
     end
 
     local function listJson(argv, field)
+        local args = { table.unpack(argv, 2) }
         local ok = noctalia.runAsync(argv, function(result)
             local data = type(result) == "table" and result.exitCode == 0 and noctalia.json.decode(result.stdout or "")
             if type(data) ~= "table" then
-                finish("Could not list Claude Code plugins")
+                local why = type(result) ~= "table" and "no result"
+                    or result.exitCode == 0 and "output was not JSON" or outcomeMessage(result)
+                logFailure(args, why)
+                finish(`Could not list Claude Code plugins ({why})`)
                 return
             end
             out[field] = data
             finish(nil)
         end, CLI_TIMEOUT)
         if not ok then
-            finish("Could not list Claude Code plugins")
+            logFailure(args, "could not start")
+            finish("Could not start claude")
         end
     end
 

@@ -276,8 +276,15 @@ end
 
 -- An expired token (Claude Code refreshes it on its next start) keeps the last limits,
 -- marked stale with the reason; the reason is logged once per change, not every fetch.
+-- api/oauth/usage is rate limited, and Claude Code's statusline and other tools may use
+-- the same token. On a 429 the next try waits for the server's Retry-After, or a backoff
+-- from 10 minutes doubling to an hour; a success resets it.
+local BACKOFF_MS, BACKOFF_MAX_MS = 10 * 60000, HOUR_MS
+-- Manual refreshes and settings changes never fetch sooner than this after the last try.
+local MIN_GAP_MS = 2 * 60000
+
 local function fetchLimits(a)
-  if a.limitsPending then return end
+  if a.limitsPending or noctalia.nowMs() < (a.limitsHold or 0) then return end
   a.limitsPending, a.limitsAt = true, noctalia.nowMs()
   local started = runJson(script("limits.sh", a.dir), 20000, function(raw, r)
     a.limitsPending = false
@@ -286,6 +293,13 @@ local function fetchLimits(a)
       a.limits = shapeLimits(raw, a.limits)
       saveLimits()
       warnLimits(a)
+      a.limitsBackoff, a.limitsHold = nil, nil
+    elseif r.exitCode == 4 then
+      local wait = (tonumber(noctalia.string.trim(r.stdout or "")) or 0) * 1000
+      a.limitsBackoff = math.min(BACKOFF_MAX_MS, a.limitsBackoff and a.limitsBackoff * 2 or BACKOFF_MS)
+      a.limitsHold = noctalia.nowMs() + math.max(wait, a.limitsBackoff)
+      err = `rate limited by Anthropic, next try {os.date("%H:%M", a.limitsHold // 1000)}`
+      if a.limits then a.limits.stale, a.limits.error = true, err end
     else
       err = noctalia.string.trim(r.stderr or "")
       if err == "" then err = r.timedOut and "timed out" or `exit {r.exitCode}` end
@@ -383,6 +397,8 @@ local function fetchRemote(a)
     else
       err = noctalia.string.trim(r.stderr or "")
       if err == "" then err = `exit {r.exitCode}` end
+      -- Rate limited (curl -f reports the 429): skip ten minutes of the once-a-minute poll.
+      if string.find(err, "429", 1, true) then rem.at = noctalia.nowMs() + 9 * 60000 end
     end
     if err ~= rem.err and err then noctalia.log(`claude-operator: remote sessions ({a.label}): {err}`) end
     rem.err = err
@@ -707,9 +723,15 @@ local function poll()
 end
 
 -- Refresh everything that runs on a timer, now.
+-- The refresh button and IPC. Plan limits only when the last try is over MIN_GAP_MS old
+-- (a rate-limit hold still applies): the other sources are local or cheap.
 local function refreshAll()
   lastSlow, usageAt, indexAt = -math.huge, -math.huge, -math.huge
-  for _, a in pairs(accounts) do a.limitsAt, a.remote.at = -math.huge, -math.huge end
+  local now = noctalia.nowMs()
+  for _, a in pairs(accounts) do
+    if now - a.limitsAt >= MIN_GAP_MS then a.limitsAt = -math.huge end
+    a.remote.at = -math.huge
+  end
   poll()
 end
 
@@ -731,7 +753,12 @@ noctalia.state.watch("command", function(v)
 end)
 function update() poll() end
 function onIpc(event) if event == "refresh" then refreshAll() end end
-function onConfigChanged() refreshAll() end
+-- A settings change re-reads local sources only; no setting changes what the plan
+-- limits are, and toggling several settings must not burn through the rate limit.
+function onConfigChanged()
+  lastSlow, usageAt, indexAt = -math.huge, -math.huge, -math.huge
+  poll()
+end
 
 noctalia.mkdirAll(DATA)
 publishPricing()

@@ -252,6 +252,13 @@ users a measure of value rather than a bill.
   that kitty. Add the two lines above and restart kitty.
 - **Limits are dimmed with "OAuth token expired"**: start Claude Code once; it refreshes
   the token and the next refresh picks it up.
+- **"rate limited by Anthropic, next try …"**: the usage endpoint allows few calls per
+  token, shared with anything else that polls it (Claude Code statusline tools, other
+  usage plugins). The plugin waits as long as the server asks, or backs off from 10
+  minutes to an hour, and shows the last known numbers meanwhile. Disable other plugins
+  that poll the same limits.
+- **Plugins tab shows an error**: the message and the log line (`claude-operator:
+  claude plugin …`) say which `claude plugin` call failed and why.
 - **Logs**: `~/.cache/noctalia/noctalia.log`, lines starting `claude-operator:`.
 
 ## License

@@ -16,14 +16,21 @@ local RESTART = "Restart Claude Code to apply."
 
 function M.load(ctx)
   if data.loading then return end
-  if not plugins.available() then data.error = "Claude Code not found (looked on PATH and in ~/.local/bin)" ctx.render() return end
+  if not plugins.available() then data.error = "Claude Code not found (looked on PATH, ~/.local/bin, ~/.npm-global/bin and ~/.bun/bin)" ctx.render() return end
   data.loading, data.error = true, nil
   ctx.render()
   plugins.refresh(function(result, err)
     data.loading, data.error = false, err
     if result then
-      data.groups = plugins.groupByMarketplace(result.plugins, result.marketplaces)
-      data.localSkills = result.localSkills
+      -- Claude Code versions differ in what `plugin list --json` returns; a shape this
+      -- code does not expect must surface as an error, not leave "Reading plugins…" up.
+      local ok, grouped = pcall(plugins.groupByMarketplace, result.plugins, result.marketplaces)
+      if ok then
+        data.groups, data.localSkills = grouped, result.localSkills
+      else
+        data.error = "Could not read the plugin list: " .. tostring(grouped)
+        noctalia.log("claude-operator: plugins: " .. tostring(grouped))
+      end
     end
     ctx.render()
   end)
@@ -91,7 +98,7 @@ local function marketRow(ctx, g, rows)
     ui.glyph({ name = "building-store", size = 14, color = "on_surface_variant" }),
     ui.column({ gap = 0, flexGrow = 1 }, {
       ui.label({ text = g.name, fontSize = 13, fontWeight = "medium", maxLines = 1 }),
-      kit.muted(g.source or "", 10),
+      kit.muted(tostring(g.source or ""), 10),
     }),
     linkButton(g.url),
     actionButton("mupdate:" .. g.name, "refresh", "Refresh marketplace",
