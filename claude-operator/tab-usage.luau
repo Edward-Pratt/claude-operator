@@ -55,8 +55,11 @@ local function forecast(w, p, color)
     ahead[#ahead + 1] = math.min(1, (w.percent + rate * (t - now) / shared.HOUR_MS) / 100)
     aheadEven[#aheadEven + 1] = (t - start) / dur
   end
+  -- ui.graph draws points 2..n only (the first two just shape the curve, for scrolling
+  -- graphs), so repeat each series' first value twice to start the line at its first point.
+  local function lead(v) return { v[1], v[1], table.unpack(v) } end
   local graph = function(values, even, c, grow)
-    return ui.graph({ values = values, values2 = even, color = c, color2 = "on_surface/0.25", lineWidth = 2,
+    return ui.graph({ values = lead(values), values2 = lead(even), color = c, color2 = "on_surface/0.25", lineWidth = 2,
       fillOpacity = 0.15, height = 56, flexGrow = grow })
   end
   return ui.column({ gap = 3 }, {
