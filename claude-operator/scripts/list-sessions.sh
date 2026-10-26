@@ -9,6 +9,7 @@
 # every transcript on every refresh.
 set -u
 shopt -s nullglob
+SCHEMA=2 # bump when the record shape changes, so cached summaries are rebuilt
 cache=${1:?usage: list-sessions.sh CACHE_DIR CONFIG_DIR...}; shift
 mkdir -p -- "$cache"
 declare -A seen=()
@@ -30,7 +31,9 @@ summarise() { # FILE ACCOUNT MTIME_MS SIZE
         prompt: (map(select(.type == "last-prompt")) | first | .lastPrompt // "" | gsub("\\s+"; " ") | .[0:400]),
         model: ($last.message.model // "" | sub("^claude-"; "")),
         context: (($u.input_tokens // 0) + ($u.cache_read_input_tokens // 0) + ($u.cache_creation_input_tokens // 0)),
-        empty: (any(.[]; .type == "--has-user") | not) }'
+        empty: (any(.[]; .type == "--has-user") | not),
+        # Started through the Agent SDK (a hook or script), not by a person.
+        auto: ($head.entrypoint // "" | startswith("sdk")) }'
 }
 
 # Prints one record per line; runs as one pipeline stage, so `seen` and the cleanup at
@@ -42,7 +45,7 @@ for cfg in "$@"; do
     id=${f##*/}; id=${id%.jsonl}
     [[ "$id" =~ ^[0-9a-fA-F-]+$ ]] || continue
     seen[$id]=1
-    key="$size:$mtime:$cfg"
+    key="$size:$mtime:$cfg:$SCHEMA"
     entry="$cache/$id.json"
     if [ -f "$entry.key" ] && [ "$(< "$entry.key")" = "$key" ] && [ -s "$entry" ]; then
       cat -- "$entry"

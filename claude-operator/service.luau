@@ -440,6 +440,27 @@ local function alive(s)
   return false
 end
 
+-- A pid's ancestors, nearest first (cached: a process never changes parent while it
+-- lives). Used to spot sessions running inside another session, such as a hook that
+-- starts `claude` through the Agent SDK to review a change.
+local ancestry = {} -- pid -> { ppid, grandparent pid, ... }
+
+local function ancestorsOf(pid)
+  local list = ancestry[pid]
+  if list then return list end
+  list = {}
+  local p = pid
+  for _ = 1, 16 do
+    local stat = noctalia.readFile("/proc/" .. tostring(p) .. "/stat")
+    local ppid = stat and tonumber(string.match(string.match(stat, "^.*%)%s*(.*)$") or "", "^%S+%s+(%d+)"))
+    if not ppid or ppid <= 1 then break end
+    list[#list + 1] = ppid
+    p = ppid
+  end
+  ancestry[pid] = list
+  return list
+end
+
 -- Claude Code files a transcript under the dir the session started in, encoded; a
 -- session that later moved (cd, worktree) has a cwd that no longer matches, so a miss
 -- falls back to one search by session id, remembered for the session's lifetime.
@@ -561,6 +582,9 @@ local function track(sessions)
   for pid in pairs(tracked) do
     if not seen[pid] then tracked[pid] = nil; details[pid] = nil; terminals[pid] = nil; gone = true end
   end
+  for pid in pairs(ancestry) do
+    if not noctalia.fileExists("/proc/" .. tostring(pid)) then ancestry[pid] = nil end
+  end
   return gone
 end
 
@@ -602,12 +626,15 @@ local function refreshIndex()
     end
     -- Published to every entry: ~190 KB for 490 sessions. The transcript path is left
     -- out (the UI derives it from account, cwd and id), as is the size.
+    local kept = {}
     for _, x in ipairs(list) do
       x.size, x.path = nil, nil
       if #x.prompt > 160 then x.prompt = string.sub(x.prompt, 1, 160) .. "…" end
+      -- Agent SDK runs (hooks, scripts) are not sessions anyone resumes.
+      if not x.auto then kept[#kept + 1] = x end
     end
-    table.sort(list, function(x, y) return x.mtime > y.mtime end)
-    publish("index", list)
+    table.sort(kept, function(x, y) return x.mtime > y.mtime end)
+    publish("index", kept)
   end)
   if not started then indexPending = false end
 end
@@ -640,6 +667,20 @@ local function poll()
     if cfg("show_elsewhere", true) and now - a.remote.at >= SLOW_MS then fetchRemote(a) end
   end
   if now - usageAt >= minutes("limits_refresh_minutes", 5) then refreshUsage() end
+
+  -- A session started from inside another one (a hook running claude through the Agent
+  -- SDK, say) is that session's helper, not a line of its own: it is counted on its
+  -- parent and gets no card, lamp or notification.
+  local byPid, own = {}, {}
+  for _, s in ipairs(sessions) do byPid[s.pid] = s end
+  for _, s in ipairs(sessions) do
+    local parent
+    for _, a in ipairs(ancestorsOf(s.pid)) do
+      if byPid[a] then parent = byPid[a] break end
+    end
+    if parent then parent.helpers = (parent.helpers or 0) + 1 else own[#own + 1] = s end
+  end
+  sessions = own
 
   localBridges = {}
   for _, s in ipairs(sessions) do

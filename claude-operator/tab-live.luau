@@ -188,6 +188,8 @@ local function liveCard(ctx, s, key, line)
   if d.context then chips[#chips + 1] = contextChip(d.context, d.contextMax) end
   if d.cost then chips[#chips + 1] = kit.chip("coin", shared.money(d.cost, ctx.rates())) end
   if (d.agents or 0) > 0 then chips[#chips + 1] = kit.chip("robot", tostring(d.agents)) end
+  -- Claude sessions running inside this one (e.g. a hook's Agent SDK review).
+  if (s.helpers or 0) > 0 then chips[#chips + 1] = kit.chip("git-fork", s.helpers == 1 and "1 helper" or `{s.helpers} helpers`) end
   if s.status ~= "busy" and d.turnMs then chips[#chips + 1] = kit.chip("clock", shared.dur(d.turnMs / 1000)) end
   body[#body + 1] = ui.row({ gap = 4, align = "center" }, chips)
   body[#body + 1] = ui.row({ gap = 6, align = "center" }, {

@@ -7,8 +7,11 @@
 n=${1:-20}; shift
 for cfg in "$@"; do [ -d "$cfg/projects" ] && printf '%s\0' "$cfg/projects"; done \
   | xargs -0 -r -I{} find {} -mindepth 2 -maxdepth 2 -name '*.jsonl' -printf '%T@ %p\n' \
-  | sort -rn | head -n "$n" |
-while read -r t f; do
+  | sort -rn |
+# Newest first until COUNT are kept: skipped sessions (Agent SDK runs, empty ones) must
+# not eat into the count.
+{ kept=0
+while [ "$kept" -lt "$n" ] && read -r t f; do
   cfg=${f%/projects/*}
   sid=$(basename "$f" .jsonl)
   # Config dirs may share one projects dir (e.g. ~/.claude-work/projects -> ~/.claude/projects),
@@ -27,12 +30,15 @@ while read -r t f; do
     if [ -z "$owner" ] || [ "$ct" -lt "$owner_t" ]; then owner=$c; owner_t=$ct; fi
   done
   [ -n "$owner" ] && cfg=$owner
-  { grep -m1 -F '"cwd":"' -- "$f"; grep -F -e '"type":"ai-title"' -e '"type":"last-prompt"' -- "$f"; } \
+  line=$({ grep -m1 -F '"cwd":"' -- "$f"; grep -F -e '"type":"ai-title"' -e '"type":"last-prompt"' -- "$f"; } \
     | jq -sc --arg a "$cfg" --arg s "$sid" --arg f "$f" --argjson m "${t%.*}" '
-        (map(select(.cwd)) | first | .cwd // "") as $cwd
+        (map(select(.cwd)) | first) as $head
+        | ($head.cwd // "") as $cwd
         | (map(select(.type == "ai-title")) | last | .aiTitle // "") as $title
         | (map(select(.type == "last-prompt")) | last | .lastPrompt // "") as $prompt
-        | select($cwd != "" and ($title + $prompt) != "")
+        # Sessions started through the Agent SDK (hooks, scripts) are not offered.
+        | select($cwd != "" and ($title + $prompt) != "" and (($head.entrypoint // "") | startswith("sdk") | not))
         | { account: $a, sessionId: $s, cwd: $cwd, title: $title, transcript: $f,
-            prompt: ($prompt | gsub("\\s+"; " ") | .[0:160]), mtime: ($m * 1000) }'
-done | jq -sc .
+            prompt: ($prompt | gsub("\\s+"; " ") | .[0:160]), mtime: ($m * 1000) }')
+  [ -n "$line" ] && { printf '%s\n' "$line"; kept=$((kept + 1)); }
+done; } | jq -sc .
