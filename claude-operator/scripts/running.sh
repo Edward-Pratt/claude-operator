@@ -1,8 +1,9 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # Print the config dir (CLAUDE_CONFIG_DIR, or ~/.claude when unset) of every running claude process.
 # A process in its own mount namespace with another dir bind-mounted over ~/.claude (e.g. bwrap
 # --bind DIR ~/.claude) reports DIR, mapped back to a path in this namespace.
-for pid in $(pgrep -x claude); do
+# Native installs run as "claude"; npm installs as node running @anthropic-ai/claude-code.
+for pid in $( (pgrep -x claude; pgrep -f '@anthropic-ai/claude-code/cli') | sort -u); do
   dir=$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | sed -n 's/^CLAUDE_CONFIG_DIR=//p')
   if [ -z "$dir" ] && [ "$(readlink "/proc/$pid/ns/mnt")" != "$(readlink /proc/self/ns/mnt)" ]; then
     # mountinfo fields: 3 = device, 4 = root of the mount within its filesystem, 5 = mount point.

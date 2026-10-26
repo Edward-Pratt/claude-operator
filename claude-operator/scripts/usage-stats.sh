@@ -1,24 +1,29 @@
 #!/usr/bin/env bash
-# usage-stats.sh PRICING_JSON CONFIG_DIR...: token use and estimated cost from the
-# transcripts of the last 30 days, as the `usage` object in docs/DESIGN.md (without
+# usage-stats.sh PRICING_JSON CACHE_DIR CONFIG_DIR...: token use and estimated cost from
+# the transcripts of the last 30 days, as the `usage` object in docs/DESIGN.md (without
 # `updated`). Days are local calendar days; "7 days" and "30 days" end today, so the chart
 # is never a lone Monday bar. Assistant lines repeat once per content block, so each
-# message id + request id counts once (the last copy, which carries the final usage).
+# message id + request id counts once (the last copy, which carries the final usage);
+# forked sessions copy messages into a new file, so that holds across files too.
+# Each transcript is reduced once per size, mtime and price-list date to one record per
+# message in CACHE_DIR, so a refresh re-reads only the transcripts that changed.
 # The five costliest sessions of the last 7 days get their title and project.
 # Reads local files only: no network, no token. Replaces the counting half of
 # get-claude-usage (jrohland/noctalia-v5-claudecode via claude-cockpit, MIT).
+set -u
 dir=$(dirname "$0")
-pricing=$(cat "${1:?usage: usage-stats.sh PRICING_JSON CONFIG_DIR...}" 2>/dev/null) || pricing='{}'
+pricing=$(cat "${1:?usage: usage-stats.sh PRICING_JSON CACHE_DIR CONFIG_DIR...}" 2>/dev/null) || pricing='{}'
 printf '%s' "$pricing" | jq -e 'type == "object"' >/dev/null 2>&1 || pricing='{}'
-shift
+cache=${2:?usage: usage-stats.sh PRICING_JSON CACHE_DIR CONFIG_DIR...}
+shift 2
+mkdir -p -- "$cache"
+priced=$(printf '%s' "$pricing" | jq -r '.updated // ""')
 days=$(for i in 6 5 4 3 2 1 0; do date -d "$i days ago" +%F; done | jq -Rsc 'split("\n")[:7]')
 labels=$(for i in 6 5 4 3 2 1 0; do date -d "$i days ago" +%a; done | jq -Rsc 'split("\n")[:7]')
 
-for cfg in "$@"; do
-  [ -d "$cfg/projects" ] && find "$cfg/projects" -name '*.jsonl' -mtime -31 -exec grep -h -F '"type":"assistant"' {} + 2>/dev/null
-done \
-  | jq -L "$dir" -nRc --argjson p "$pricing" --argjson days "$days" --argjson labels "$labels" \
-      --arg today "$(date +%F)" --arg month "$(date -d '29 days ago' +%F)" '
+# One JSON line per billed message: {k, day, model, session, tokens, cost}.
+reduce_file() {
+  grep -h -F '"type":"assistant"' -- "$1" 2>/dev/null | jq -L "$dir" -nRc --argjson p "$pricing" '
     include "pricing";
     def tokens: (.input_tokens // 0) + (.output_tokens // 0)
       + (.cache_read_input_tokens // 0) + (.cache_creation_input_tokens // 0);
@@ -27,10 +32,47 @@ done \
       + (.cache_read_input_tokens // 0) * $r.cache_read
       + (.cache_creation_input_tokens // 0) * $r.cache_write end;
     reduce (inputs | fromjson? | select(.type == "assistant" and (.message.usage | type) == "object")) as $o ({};
-      .[($o.message.id // $o.uuid // "") + ":" + ($o.requestId // "")] =
-        { day: ($o.timestamp // "" | sub("\\.[0-9]+"; "") | fromdateiso8601? // 0 | strflocaltime("%Y-%m-%d")),
+      (($o.message.id // $o.uuid // "") + ":" + ($o.requestId // "")) as $k
+      | .[$k] = { k: $k,
+          day: ($o.timestamp // "" | sub("\\.[0-9]+"; "") | fromdateiso8601? // 0 | strflocaltime("%Y-%m-%d")),
           model: ($o.message.model // ""), session: ($o.sessionId // ""),
           tokens: ($o.message.usage | tokens), cost: ($o.message.usage | cost($o.message.model)) })
+    | .[]'
+}
+
+# Cached records of every transcript touched in the last 31 days; runs as one pipeline
+# stage, so `seen` and the cleanup at its end share a shell.
+records() {
+  declare -A seen=()
+  local i=0 cfg size mtime f name key entry
+  for cfg in "$@"; do
+    i=$((i + 1))
+    [ -d "$cfg/projects" ] || continue
+    while IFS=$'\t' read -r size mtime f; do
+      name=${f#"$cfg/projects/"}; name="$i-${name//\//_}"
+      seen[$name]=1
+      key="$size:$mtime:$priced"
+      entry="$cache/$name"
+      if [ -f "$entry.key" ] && [ "$(< "$entry.key")" = "$key" ]; then
+        cat -- "$entry"
+      else
+        reduce_file "$f" > "$entry.tmp" && mv -f -- "$entry.tmp" "$entry" \
+          && printf '%s' "$key" > "$entry.key" && cat -- "$entry"
+        rm -f -- "$entry.tmp"
+      fi
+    done < <(find "$cfg/projects" -name '*.jsonl' -mtime -31 -printf '%s\t%T@\t%p\n' 2>/dev/null)
+  done
+  for entry in "$cache"/*; do
+    [[ "$entry" == *.key ]] && continue
+    [ -n "${seen[${entry##*/}]:-}" ] || rm -f -- "$entry" "$entry.key"
+  done
+}
+
+shopt -s nullglob
+records "$@" \
+  | jq -nc --argjson days "$days" --argjson labels "$labels" \
+      --arg today "$(date +%F)" --arg month "$(date -d '29 days ago' +%F)" '
+    reduce inputs as $r ({}; .[$r.k] = $r)
     | [.[]] as $all
     | ($all | map(select(.day >= $days[0]))) as $week
     | ($all | map(select(.day >= $month))) as $mon

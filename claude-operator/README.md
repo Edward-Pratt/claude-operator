@@ -36,8 +36,17 @@ Claude Operator merges [claude-cockpit](https://github.com/noctalia-dev/communit
   listen_on unix:@kitty-{kitty_pid}
   ```
 
-- Optional: `hyprctl` (Hyprland, Lua or classic config), `niri` or `swaymsg` to focus a
-  session's window. On other compositors everything else works.
+- Optional, to jump to a session's window: Hyprland (`hyprctl`, Lua or classic config),
+  niri (`niri`), sway (`swaymsg`) or Umbriel (`umbriel`), the compositors whose window list
+  names each window's process. On GNOME, KDE, river, labwc and others everything else
+  works, and clicking a card says it cannot find the window. Without a compositor window
+  list, new sessions still open as tabs in the newest kitty.
+- Optional: tmux. A session inside tmux gets its pane selected, then the terminal of the
+  attached client is focused (the most recently active one).
+- Any terminal works. Cards name it: kitty, Alacritty, WezTerm, Ghostty, Konsole, foot,
+  VTE terminals, or whatever sets `TERM_PROGRAM`, prefixed with `tmux ·` inside tmux.
+- GNU coreutils, findutils, grep and sed, as on every mainstream distribution (the
+  scripts use `find -printf`, `stat -c` and `date -d`); BusyBox alone is not enough.
 - Optional: `code` or `zed` to open CLAUDE.md files, or set **Editor command**.
 
 ## Usage
@@ -145,7 +154,7 @@ noctalia msg plugin edward/claude-operator:widget focused click
 | --- | --- | --- |
 | Running sessions | `<config dir>/sessions/<pid>.json`, written by Claude Code. Files of crashed sessions, or whose pid was reused, are skipped. The `.key` files beside them are never read. | every 2 s, in Luau, no processes |
 | Session details | The session's transcript in `<config dir>/projects/`, by `scripts/details.sh` | only when the transcript changes |
-| Terminal | The session process's environment (`/proc/<pid>/environ`), checked once for `KITTY_WINDOW_ID` and `TERM_PROGRAM`. Nothing else from it is kept. | once per session |
+| Terminal | The session process's environment (`/proc/<pid>/environ`), checked once for `TERM_PROGRAM`, `TMUX` and a few terminal-specific variables (`KITTY_WINDOW_ID`, `ALACRITTY_WINDOW_ID`, ...). Only the terminal's name is kept. Focusing reads `KITTY_*`, `TMUX` and `TMUX_PANE` again. | once per session |
 | Accounts | `~/.claude`, plus the `CLAUDE_CONFIG_DIR` of running `claude` processes (or a dir bind-mounted over `~/.claude`, from `/proc/<pid>/mountinfo`), by `scripts/running.sh`. The account email comes from `.claude.json`. | every minute |
 | Recent sessions, usage history | Transcripts in `<config dir>/projects/` | every minute / every `limits_refresh_minutes` |
 | Session browser | Transcripts, summarised once per size and mtime into the data dir | when the Sessions tab opens or refreshes |
@@ -177,8 +186,8 @@ In the plugin data dir (`~/.local/state/noctalia/plugins/data/edward/claude-oper
 
 ### Processes and deletes
 
-It runs its own `scripts/` through `bash`, `kitty @`, `hyprctl`, `niri msg` or `swaymsg`
-to focus windows and open tabs (window ids and pids only), `claude --resume` and
+It runs its own `scripts/` through `bash`, `kitty @`, `tmux`, `hyprctl`, `niri msg`,
+`swaymsg` or `umbriel` to focus windows, panes and tabs (window ids and pids only), `claude --resume` and
 `claude plugin`, your editor, and `xdg-open`. Stopping a session sends it `kill -TERM`.
 Deleting a session removes its transcript and its subagent folder, always after an
 inline confirm.

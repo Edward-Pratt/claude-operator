@@ -284,12 +284,19 @@ end
 
 function M.open(target) return noctalia.runAsync({ "xdg-open", target }) end
 
--- Brings the session's terminal to the front (the exact kitty tab when kitty remote
--- control is on). A Remote Control session with no window, e.g. a headless
--- `claude remote-control`, opens on claude.ai instead.
+-- Brings the session's terminal to the front (the exact kitty tab with kitty remote
+-- control, the exact pane in tmux). A Remote Control session with no window, e.g. a
+-- headless `claude remote-control`, opens on claude.ai instead; anything else says why
+-- nothing happened.
 function M.focus(s)
   noctalia.runAsync({ "bash", SCRIPTS .. "/focus.sh", tostring(s.pid) }, function(r)
-    if r.exitCode ~= 0 and s.remote then M.open(s.remote) end
+    if r.exitCode == 0 then return end
+    if s.remote then
+      M.open(s.remote)
+    else
+      noctalia.notify("Claude Operator", "Could not find this session's window. Window focus works on Hyprland, "
+        .. "niri, sway and Umbriel; inside tmux it needs an attached client.")
+    end
   end, 10000)
 end
 

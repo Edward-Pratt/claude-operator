@@ -99,11 +99,31 @@ command   = { action = "refresh", at }                 -- panel -> service
 - **claude binary**: noctalia's environment often lacks `~/.local/bin`, so
   `shared.claudeBin()` falls back to `~/.local/bin/claude` and `~/.claude/local/claude`.
 
-## Scale notes
+## Efficiency
 
-- `usage-stats.sh` re-reads a month of transcripts (1.9 s for 575 files, 427 MB) every
-  `limits_refresh_minutes`. If `~/.claude/projects` doubles, give it the per-file
-  size+mtime cache `list-sessions.sh` uses.
+- The 2 s tick reads small JSON files in Luau and spawns nothing. State is published only
+  when its JSON changed, so the widget, panel and launcher re-render on real changes, not
+  every tick.
+- Transcripts are only re-read when they change: details per size+mtime, the session
+  browser and usage history through per-file caches in the data dir (usage: one record
+  per message, de-duplicated across files at aggregation, since forks copy messages).
+  Measured on 575 transcripts / 427 MB: usage 1.9 s cold, 0.33 s warm; session list
+  1.8 s cold, 0.19 s warm; details 17 ms on a 29 MB transcript.
+- The panel re-renders every second only on Live and Usage (ages and countdowns).
+- `wm.sh` detects the compositor once and reads its window list once per script run.
+
+## Portability
+
+- Window focus: Hyprland, niri, sway and Umbriel (window list carries a pid); tmux panes via
+  the attached client; kitty tabs via remote control. Elsewhere `focus.sh` exits 1 and the
+  plugin says so. `tests/focus.sh` checks every compositor path with stub CLIs fed each
+  compositor's JSON shape, plus a real tmux server; run it after touching `wm.sh` or
+  `focus.sh`.
+- Terminals: detected from `TERM_PROGRAM` or terminal-specific variables; new sessions open
+  as kitty tabs when possible (any compositor), else through the `terminal` setting or
+  Noctalia's terminal.
+- Claude Code: native (`claude`) and npm (`node .../@anthropic-ai/claude-code/cli.js`)
+  processes are both found.
 
 ## Credits
 

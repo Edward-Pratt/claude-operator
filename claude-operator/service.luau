@@ -60,6 +60,16 @@ local function runJson(argv, timeoutMs, done)
   end, timeoutMs)
 end
 
+-- Publishes only real changes: the tick runs every 2 s, and every state.set wakes the
+-- widget, panel and launcher to re-render.
+local published = {}
+local function publish(key, value)
+  local encoded = noctalia.json.encode(value) or ""
+  if published[key] == encoded then return end
+  published[key] = encoded
+  noctalia.state.set(key, value)
+end
+
 local function script(name, ...)
   local argv = { "bash", SCRIPTS .. "/" .. name }
   for _, a in ipairs({ ... }) do argv[#argv + 1] = a end
@@ -171,7 +181,7 @@ local function publishAccounts()
   for _, a in ipairs(accountList()) do
     out[#out + 1] = { dir = a.dir, label = a.label, email = a.email, default = a.dir == DEFAULT_DIR, limits = a.limits }
   end
-  noctalia.state.set("accounts", out)
+  publish("accounts", out)
 end
 
 -- ── Plan limits ─────────────────────────────────────────────────────────────
@@ -261,7 +271,7 @@ end
 
 local function publishPricing()
   local p = decode(noctalia.readFile(PRICING))
-  noctalia.state.set("pricing", p and { updated = p.updated, rates = p.rates } or nil)
+  publish("pricing", p and { updated = p.updated, rates = p.rates } or nil)
 end
 
 -- Once a day (the file records the date it was fetched); callback runs either way.
@@ -285,13 +295,13 @@ local function refreshUsage()
   if usagePending then return end
   usagePending, usageAt = true, noctalia.nowMs()
   refreshPricing(function()
-    local argv = script("usage-stats.sh", PRICING)
+    local argv = script("usage-stats.sh", PRICING, DATA .. "/usage")
     for _, a in ipairs(accountList()) do argv[#argv + 1] = a.dir end
     local started = runJson(argv, 60000, function(usage, r)
       usagePending = false
       if usage then
         usage.updated = noctalia.nowMs()
-        noctalia.state.set("usage", usage)
+        publish("usage", usage)
       else
         noctalia.log("claude-operator: usage stats failed: " .. noctalia.string.trim(r.stderr or ""))
       end
@@ -327,7 +337,7 @@ local function publishElsewhere()
     if (x.category == "need_input") ~= (y.category == "need_input") then return x.category == "need_input" end
     return x.since > y.since
   end)
-  noctalia.state.set("elsewhere", out)
+  publish("elsewhere", out)
 end
 
 local function fetchRemote(a)
@@ -352,19 +362,34 @@ end
 
 -- ── Live sessions ───────────────────────────────────────────────────────────
 
--- Which terminal hosts the session; kitty gets exact tab focusing (see focus.sh).
+-- Variables only one terminal sets, checked when TERM_PROGRAM says nothing useful.
+local TERMINAL_MARKERS = {
+  { "KITTY_WINDOW_ID=", "kitty" }, { "ALACRITTY_WINDOW_ID=", "alacritty" }, { "WEZTERM_PANE=", "wezterm" },
+  { "GHOSTTY_RESOURCES_DIR=", "ghostty" }, { "KONSOLE_VERSION=", "konsole" }, { "TERM=foot", "foot" },
+  { "VTE_VERSION=", "vte" },
+}
+
+-- Which terminal hosts the session, with "tmux · " in front inside tmux; kitty and tmux
+-- get exact tab / pane focusing (see focus.sh). Plain finds plus an anchored match: an
+-- unanchored pattern over a ~15 KB environment costs ~10 ms in the shell's runtime,
+-- enough to blow the callback budget.
 local function terminalOf(pid)
   local t = terminals[pid]
   if t then return t end
-  local env = noctalia.readFile("/proc/" .. tostring(pid) .. "/environ") or ""
-  if string.find(env, "KITTY_WINDOW_ID=", 1, true) then
-    t = "kitty"
-  else
-    -- Plain find + anchored match: an unanchored pattern over a ~15 KB environment
-    -- costs ~10 ms in the shell's runtime, enough to blow the callback budget.
-    local _, e = string.find(env, "TERM_PROGRAM=", 1, true)
-    t = e and string.match(env, "^[^%z]+", e + 1) or "terminal"
+  local env = "\0" .. (noctalia.readFile("/proc/" .. tostring(pid) .. "/environ") or "")
+  local function value(name)
+    local _, e = string.find(env, "\0" .. name .. "=", 1, true)
+    return e and string.match(env, "^[^%z]*", e + 1) or nil
   end
+  local program = value("TERM_PROGRAM")
+  if program == "tmux" or program == "" then program = nil end
+  if not program then
+    for _, m in ipairs(TERMINAL_MARKERS) do
+      if string.find(env, "\0" .. m[1], 1, true) then program = m[2] break end
+    end
+  end
+  t = program or "terminal"
+  if value("TMUX") then t = "tmux · " .. t end
   terminals[pid] = t
   return t
 end
@@ -409,7 +434,7 @@ local function publishSessions()
     s.d = d and d.data or nil
     s.transcript = d and d.path or nil
   end
-  noctalia.state.set("sessions", current)
+  publish("sessions", current)
 end
 
 -- details.sh re-runs only when the transcript's size or mtime changed.
@@ -503,7 +528,7 @@ end
 
 local function refreshRecent()
   local count = tonumber(cfg("recent_count", 8)) or 8
-  if count <= 0 then noctalia.state.set("recent", {}) return end
+  if count <= 0 then publish("recent", {}) return end
   if recentPending then return end
   recentPending = true
   local argv = script("recent.sh", tostring(count + 10))
@@ -517,7 +542,7 @@ local function refreshRecent()
     for _, x in ipairs(list) do
       if not live[x.sessionId] and #out < count then out[#out + 1] = x end
     end
-    noctalia.state.set("recent", out)
+    publish("recent", out)
   end)
   if not started then recentPending = false end
 end
