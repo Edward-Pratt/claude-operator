@@ -107,6 +107,18 @@ local function linkButton(url)
     function() plugins.openUrl(url) end)
 end
 
+-- Shown only with a newer version (or while Update all is on this row). Otherwise an
+-- invisible stand-in keeps the row's buttons lined up with the others; opacity is set
+-- both ways because the host keeps a prop a later render leaves out.
+local function updateButton(ctx, p)
+  local key = "update:" .. p.id
+  if p.newVersion or busy[key] then
+    return kit.iconButton(busy[key] and "loader-2" or "circle-arrow-up", `Update to {p.newVersion or "latest"}`,
+      function() run(ctx, key, p.name, plugins.updatePlugin, p, RESTART) end, { enabled = not busy[key], opacity = 1 })
+  end
+  return kit.iconButton("circle-arrow-up", nil, nil, { enabled = false, opacity = 0 })
+end
+
 local function pluginRow(ctx, p, rows)
   local key = "plugin:" .. p.id
   local meta = p.version .. (p.newVersion and (" → " .. p.newVersion) or "") .. (p.enabled and "" or " · disabled")
@@ -119,8 +131,7 @@ local function pluginRow(ctx, p, rows)
     linkButton(p.url),
     actionButton("toggle:" .. p.id, p.enabled and "toggle-right" or "toggle-left", p.enabled and "Disable" or "Enable",
       function() run(ctx, "toggle:" .. p.id, p.name, plugins.setEnabled, p, RESTART) end),
-    actionButton("update:" .. p.id, p.newVersion and "circle-arrow-up" or "download", p.newVersion and "Update available" or "Update",
-      function() run(ctx, "update:" .. p.id, p.name, plugins.updatePlugin, p, RESTART) end),
+    updateButton(ctx, p),
     actionButton(key, "trash", "Uninstall", ask(ctx, key))
   ))
   if confirming == key then
