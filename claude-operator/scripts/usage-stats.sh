@@ -24,16 +24,13 @@ labels=$(for i in 6 5 4 3 2 1 0; do date -d "$i days ago" +%a; done | jq -Rsc 's
 
 # One JSON line per billed message: {k, day, dow (1 = Monday), hour, model, session,
 # tokens, cost}. Bump SCHEMA when this shape changes, so cached files are rebuilt.
-SCHEMA=2
+SCHEMA=3
 reduce_file() {
   grep -h -F '"type":"assistant"' -- "$1" 2>/dev/null | jq -L "$dir" -nRc --argjson p "$pricing" '
     include "pricing";
     def tokens: (.input_tokens // 0) + (.output_tokens // 0)
       + (.cache_read_input_tokens // 0) + (.cache_creation_input_tokens // 0);
-    def cost($m): price($m) as $r | if $r == null then 0 else
-      (.input_tokens // 0) * $r.input + (.output_tokens // 0) * $r.output
-      + (.cache_read_input_tokens // 0) * $r.cache_read
-      + (.cache_creation_input_tokens // 0) * $r.cache_write end;
+    def cost($m): price($m) as $r | if $r == null then 0 else usage_cost($r) end;
     reduce (inputs | fromjson? | select(.type == "assistant" and (.message.usage | type) == "object")) as $o ({};
       (($o.message.id // $o.uuid // "") + ":" + ($o.requestId // "")) as $k
       | ($o.timestamp // "" | sub("\\.[0-9]+"; "") | fromdateiso8601? // 0) as $ts

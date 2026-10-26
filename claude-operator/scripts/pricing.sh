@@ -3,10 +3,11 @@
 #
 # Refreshes OUT_FILE with Claude model prices and USD exchange rates:
 #   { updated: "YYYY-MM-DD",
-#     models:   { "claude-opus-4-7": { input, output, cache_read, cache_write, max } },
+#     models:   { "claude-opus-4-7": { input, output, cache_read, cache_write, cache_write_1h, max } },
 #     families: { "opus": "claude-opus-5-5" },   # newest model per family, for unknown ids
 #     rates:    { "GBP": 0.75, ... } }
-# Prices are USD per token, max is the context window in tokens. Model ids drop the
+# Prices are USD per token; cache_write is the 5-minute cache rate, cache_write_1h the
+# 1-hour one. max is the context window in tokens. Model ids drop the
 # -YYYYMMDD snapshot suffix, the way transcripts name them. Either half that fails to
 # download keeps its previous value, so a network blip never empties the file.
 # No token or account data is involved: both sources are public.
@@ -29,6 +30,8 @@ models=$(curl -sSf --max-time 20 "$litellm" | jq -c '
                  output: (.value.output_cost_per_token // 0),
                  cache_read: (.value.cache_read_input_token_cost // 0),
                  cache_write: (.value.cache_creation_input_token_cost // 0),
+                 cache_write_1h: (.value.cache_creation_input_token_cost_above_1hr
+                                  // .value.cache_creation_input_token_cost // 0),
                  max: (.value.max_input_tokens // null) } } ]
   | from_entries') || models=
 printf '%s' "$models" | jq -e 'type == "object" and length > 0' >/dev/null 2>&1 \
