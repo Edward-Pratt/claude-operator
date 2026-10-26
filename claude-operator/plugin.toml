@@ -13,8 +13,14 @@ version = "0.1.0"
 plugin_api = 33
 author = "edward"
 license = "MIT"
-# kitty, hyprctl, niri, swaymsg, code and zed are optional and checked at run time.
-dependencies = ["bash", "jq", "curl", "find", "grep", "pgrep", "xdg-open", "claude"]
+# The scripts' tools. kitty (exact-tab focus, new sessions as tabs), hyprctl, niri,
+# swaymsg (window focus) and code / zed (CLAUDE.md editor) are optional and checked at
+# run time, so they are not listed.
+dependencies = [
+  "bash", "jq", "curl", "find", "grep", "sed", "awk", "tac", "stat", "sort", "head", "tail",
+  "tr", "xargs", "date", "basename", "dirname", "readlink", "cat", "mkdir", "mv", "rm",
+  "pgrep", "kill", "xdg-open", "claude",
+]
 tags = ["ai", "development", "bar", "panel", "launcher", "service", "productivity"]
 icon = "headset"
 description = "Live Claude Code sessions, plan limits and cost on the bar; jump to, resume and manage every session."

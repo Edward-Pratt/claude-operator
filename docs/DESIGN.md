@@ -16,7 +16,9 @@ claude-operator/            repo root, added to noctalia as a `path` plugin sour
     service.luau            the only entry that reads Claude data or polls
     widget.luau             bar widget, renders state only
     panel.luau              panel shell: header, tabs, keys; one module per tab
-    tab-*.luau              panel tabs
+    tab-*.luau              panel tabs: live, usage, sessions, claudemd ("Memory"), plugins
+    kit.luau                ui building blocks and the keyboard selection model
+    plugins.luau            `claude plugin` wrapper for the Plugins tab
     launcher.luau           /co launcher provider
     shared.luau             formatting, pace model, currency, actions
     scripts/                shell helpers the service and panel run
@@ -81,6 +83,14 @@ command   = { action = "refresh", at }                 -- panel -> service
   browser's filter input keeps every letter.
 - **Accounts**: data is keyed by config dir from the start; account headers and the
   account picker come later.
+- **claude binary**: noctalia's environment often lacks `~/.local/bin`, so
+  `shared.claudeBin()` falls back to `~/.local/bin/claude` and `~/.claude/local/claude`.
+
+## Scale notes
+
+- `usage-stats.sh` re-reads a month of transcripts (1.9 s for 575 files, 427 MB) every
+  `limits_refresh_minutes`. If `~/.claude/projects` doubles, give it the per-file
+  size+mtime cache `list-sessions.sh` uses.
 
 ## Credits
 
