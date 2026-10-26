@@ -14,6 +14,7 @@
 --
 -- Force a refresh: noctalia msg plugin edward/claude-operator:service all refresh
 
+local shared = require("./shared.luau")
 local PLUGIN = noctalia.pluginDir()
 local SCRIPTS = PLUGIN .. "/scripts"
 local HOME = noctalia.getenv("HOME") or ""
@@ -22,6 +23,8 @@ local DATA = noctalia.pluginDataDir()
 local PRICING = DATA .. "/pricing.json"
 local SAVED_ACCOUNTS = DATA .. "/accounts.json"
 local SAVED_LIMITS = DATA .. "/limits.json"
+local PINS = DATA .. "/pins.json"
+local INDEX_MS = 5 * 60000 -- the saved-session index; also rebuilt when a session ends
 
 local TICK_MS = 2000
 local SLOW_MS = 60000 -- account discovery, Recent, Remote Control
@@ -38,6 +41,8 @@ local remoteSeen = {} -- remote id -> last status category, for notifications
 local lastSlow = -math.huge
 local recentPending, usagePending, pricingPending = false, false, false
 local usageAt = -math.huge
+local indexPending, indexAt = false, -math.huge
+local warned = {} -- window id .. reset time -> true once its "limit soon" notice went out
 
 local function cfg(key, fallback)
   local v = noctalia.getConfig(key)
@@ -200,19 +205,29 @@ end
 -- an empty list. Lookback per window kind, and the shortest span a rate is trusted from.
 local LOOKBACK = { session = HOUR_MS, weekly = DAY_MS }
 local MIN_SPAN = { session = 30 * 60000, weekly = 3 * HOUR_MS }
+-- Samples cover the whole window, for the Usage tab's forecast graph; weekly ones are
+-- thinned to one per half hour (the newest wins), at most ~340 per window.
+local THIN = { session = 0, weekly = 30 * 60000 }
 
 local function addSample(w, prev, now)
+  local kind = w.kind == "session" and "session" or "weekly"
   local same = prev and prev.resetsAt and w.resetsAt and math.abs(prev.resetsAt - w.resetsAt) < 10 * 60000
+  local start = (w.resetsAt or now) - (w.durationMs or 7 * DAY_MS)
   local samples = {}
-  local lookback = LOOKBACK[w.kind == "session" and "session" or "weekly"]
   for _, smp in ipairs(same and type(prev.samples) == "table" and prev.samples or {}) do
-    if now - smp[1] <= lookback then samples[#samples + 1] = smp end
+    if smp[1] >= start then samples[#samples + 1] = smp end
   end
+  local last = samples[#samples]
+  if last and now - last[1] < THIN[kind] then samples[#samples] = nil end
   samples[#samples + 1] = { now, w.percent }
   w.samples = samples
-  local first = samples[1]
-  local span = now - first[1]
-  if span >= MIN_SPAN[w.kind == "session" and "session" or "weekly"] then
+  -- Recent rate: from the oldest sample inside the lookback to now.
+  local first
+  for _, smp in ipairs(samples) do
+    if now - smp[1] <= LOOKBACK[kind] then first = smp break end
+  end
+  local span = first and now - first[1] or 0
+  if span >= MIN_SPAN[kind] then
     w.rate = math.max(0, (w.percent - first[2]) / (span / HOUR_MS)) -- percent per hour
     w.rateSpanMs = span
   end
@@ -238,6 +253,21 @@ local function shapeLimits(raw, previous)
   return { updated = now, stale = false, subscription = raw.subscription, tier = raw.tier, windows = windows }
 end
 
+-- One notice per window and reset when the current rate reaches the limit within the hour
+-- (5-hour window) or the day (weekly ones).
+local function warnLimits(a)
+  if not cfg("notify_limits", true) then return end
+  for _, w in ipairs(a.limits.windows) do
+    local p = shared.pace(w)
+    local key = `{a.dir}|{w.id}|{w.resetsAt or 0}`
+    if p.status == "soon" and not warned[key] then
+      warned[key] = true
+      local headline = shared.paceText(w, p)
+      noctalia.notify(`Claude {w.label} limit close`, `{headline}. {w.label} is at {shared.round(w.percent)}%.`)
+    end
+  end
+end
+
 local function saveLimits()
   local out = {}
   for dir, a in pairs(accounts) do if a.limits then out[dir] = a.limits end end
@@ -255,6 +285,7 @@ local function fetchLimits(a)
     if raw then
       a.limits = shapeLimits(raw, a.limits)
       saveLimits()
+      warnLimits(a)
     else
       err = noctalia.string.trim(r.stderr or "")
       if err == "" then err = r.timedOut and "timed out" or `exit {r.exitCode}` end
@@ -514,10 +545,17 @@ local function track(sessions)
         end
       end
     else
-      t = {}
+      t = { history = { { s.since > 0 and s.since or noctalia.nowMs(), s.status } } }
       tracked[s.pid] = t
     end
     if s.status == "busy" and t.status ~= "busy" and t.status ~= "waiting" then t.busySince = s.since end
+    if t.status and t.status ~= s.status then
+      t.history[#t.history + 1] = { s.since > 0 and s.since or noctalia.nowMs(), s.status }
+    end
+    -- The last hour of transitions, plus the one that was current when it began.
+    local cutoff = noctalia.nowMs() - HOUR_MS
+    while #t.history > 1 and t.history[2][1] <= cutoff do table.remove(t.history, 1) end
+    s.timeline = t.history
     t.status = s.status
   end
   for pid in pairs(tracked) do
@@ -545,6 +583,45 @@ local function refreshRecent()
     publish("recent", out)
   end)
   if not started then recentPending = false end
+end
+
+-- ── Saved sessions and pins ─────────────────────────────────────────────────
+
+-- Every saved session, for the Sessions tab and the launcher. list-sessions.sh caches
+-- each transcript's summary, so a rebuild costs a stat per unchanged session.
+local function refreshIndex()
+  if indexPending then return end
+  indexPending, indexAt = true, noctalia.nowMs()
+  local argv = script("list-sessions.sh", DATA .. "/sessions")
+  for _, a in ipairs(accountList()) do argv[#argv + 1] = a.dir end
+  local started = runJson(argv, 60000, function(list, r)
+    indexPending = false
+    if not list then
+      noctalia.log("claude-operator: session index failed: " .. noctalia.string.trim(r.stderr or ""))
+      return
+    end
+    for _, x in ipairs(list) do
+      x.size = nil
+      if #x.prompt > 160 then x.prompt = string.sub(x.prompt, 1, 160) .. "…" end
+    end
+    table.sort(list, function(x, y) return x.mtime > y.mtime end)
+    publish("index", list)
+  end)
+  if not started then indexPending = false end
+end
+
+local pins = decode(noctalia.readFile(PINS)) or {}
+
+local function togglePin(cwd)
+  if type(cwd) ~= "string" or cwd == "" then return end
+  local out, found = {}, false
+  for _, p in ipairs(pins) do
+    if p == cwd then found = true else out[#out + 1] = p end
+  end
+  if not found then out[#out + 1] = cwd end
+  pins = out
+  noctalia.writeFile(PINS, noctalia.json.encode(pins))
+  publish("pins", pins)
 end
 
 -- ── Tick ────────────────────────────────────────────────────────────────────
@@ -583,11 +660,12 @@ local function poll()
   publishSessions()
   publishElsewhere()
   if gone or slow then refreshRecent() end
+  if gone or now - indexAt >= INDEX_MS then refreshIndex() end
 end
 
 -- Refresh everything that runs on a timer, now.
 local function refreshAll()
-  lastSlow, usageAt = -math.huge, -math.huge
+  lastSlow, usageAt, indexAt = -math.huge, -math.huge, -math.huge
   for _, a in pairs(accounts) do a.limitsAt, a.remote.at = -math.huge, -math.huge end
   poll()
 end
@@ -598,6 +676,10 @@ noctalia.state.watch("command", function(v)
   if type(v) ~= "table" then return end
   if v.action == "refresh" then
     refreshAll()
+  elseif v.action == "reindex" then
+    refreshIndex()
+  elseif v.action == "pin" then
+    togglePin(v.cwd)
   elseif v.action == "open" then
     lastSlow = -math.huge
     for _, a in pairs(accounts) do a.remote.at = -math.huge end
@@ -610,5 +692,6 @@ function onConfigChanged() refreshAll() end
 
 noctalia.mkdirAll(DATA)
 publishPricing()
+publish("pins", pins)
 noctalia.setUpdateInterval(TICK_MS)
 poll()

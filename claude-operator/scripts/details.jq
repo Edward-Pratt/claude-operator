@@ -7,6 +7,8 @@ def oneline: gsub("\\s+"; " ") | .[0:160];
 | (lastof(.type == "assistant" and any(blocks[]; .type == "tool_use")) | blocks | map(select(.type == "tool_use")) | last) as $tool
 | (lastof(.type == "assistant" and any(blocks[]; .name == "TodoWrite")) | blocks | map(select(.name == "TodoWrite")) | last | .input.todos) as $todos
 | (lastof(.type == "system" and .subtype == "turn_duration")) as $turn
+| (lastof(.type == "assistant" and any(blocks[]; .type == "text" and (.text // "") != ""))
+   | blocks | map(select(.type == "text") | .text) | join("\n\n")) as $reply
 | {
     title: (lastof(.type == "ai-title") | .aiTitle),
     mode: (lastof(.type == "permission-mode") | .permissionMode),
@@ -24,5 +26,11 @@ def oneline: gsub("\\s+"; " ") | .[0:160];
     prompt: (lastof(.type == "last-prompt") | .lastPrompt // null | if . then oneline else . end),
     cost: $cost,
     turnMs: $turn.durationMs,
-    agents: ($turn.pendingBackgroundAgentCount // 0)
+    agents: ($turn.pendingBackgroundAgentCount // 0),
+    # Claude's last words, for the card's preview; capped, the panel says when it was cut.
+    reply: ($reply | if . then .[0:2500] else null end),
+    replyCut: (($reply // "") | length > 2500),
+    # The questions of a pending AskUserQuestion, if that was the last tool call.
+    question: (if $tool and $tool.name == "AskUserQuestion" then
+      [$tool.input.questions[]? | { question, options: [.options[]?.label] }] else null end)
   }

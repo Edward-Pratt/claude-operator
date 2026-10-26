@@ -50,6 +50,13 @@ max = 240
 visible_when = { key = "notify_finished", values = ["true"] }
 
 [[setting]]
+key = "notify_limits"
+type = "bool"
+label_key = "settings.notify_limits.label"
+description_key = "settings.notify_limits.description"
+default = true
+
+[[setting]]
 key = "show_elsewhere"
 type = "bool"
 label_key = "settings.show_elsewhere.label"

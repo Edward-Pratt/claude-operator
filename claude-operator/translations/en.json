@@ -90,6 +90,10 @@
         "bar": "Linear bar",
         "text": "Percentage only"
       }
+    },
+    "notify_limits": {
+      "label": "Warn before a limit",
+      "description": "Notify once per window when the current rate reaches the 5-hour limit within the hour, or a weekly limit within a day."
     }
   }
 }

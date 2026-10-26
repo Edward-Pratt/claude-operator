@@ -21,7 +21,9 @@ priced=$(printf '%s' "$pricing" | jq -r '.updated // ""')
 days=$(for i in 6 5 4 3 2 1 0; do date -d "$i days ago" +%F; done | jq -Rsc 'split("\n")[:7]')
 labels=$(for i in 6 5 4 3 2 1 0; do date -d "$i days ago" +%a; done | jq -Rsc 'split("\n")[:7]')
 
-# One JSON line per billed message: {k, day, model, session, tokens, cost}.
+# One JSON line per billed message: {k, day, dow (1 = Monday), hour, model, session,
+# tokens, cost}. Bump SCHEMA when this shape changes, so cached files are rebuilt.
+SCHEMA=2
 reduce_file() {
   grep -h -F '"type":"assistant"' -- "$1" 2>/dev/null | jq -L "$dir" -nRc --argjson p "$pricing" '
     include "pricing";
@@ -33,8 +35,9 @@ reduce_file() {
       + (.cache_creation_input_tokens // 0) * $r.cache_write end;
     reduce (inputs | fromjson? | select(.type == "assistant" and (.message.usage | type) == "object")) as $o ({};
       (($o.message.id // $o.uuid // "") + ":" + ($o.requestId // "")) as $k
-      | .[$k] = { k: $k,
-          day: ($o.timestamp // "" | sub("\\.[0-9]+"; "") | fromdateiso8601? // 0 | strflocaltime("%Y-%m-%d")),
+      | ($o.timestamp // "" | sub("\\.[0-9]+"; "") | fromdateiso8601? // 0) as $ts
+      | .[$k] = { k: $k, day: ($ts | strflocaltime("%Y-%m-%d")),
+          dow: ($ts | strflocaltime("%u") | tonumber), hour: ($ts | strflocaltime("%H") | tonumber),
           model: ($o.message.model // ""), session: ($o.sessionId // ""),
           tokens: ($o.message.usage | tokens), cost: ($o.message.usage | cost($o.message.model)) })
     | .[]'
@@ -51,7 +54,7 @@ records() {
     while IFS=$'\t' read -r size mtime f; do
       name=${f#"$cfg/projects/"}; name="$i-${name//\//_}"
       seen[$name]=1
-      key="$size:$mtime:$priced"
+      key="$size:$mtime:$priced:$SCHEMA"
       entry="$cache/$name"
       if [ -f "$entry.key" ] && [ "$(< "$entry.key")" = "$key" ]; then
         cat -- "$entry"
@@ -89,7 +92,10 @@ records "$@" \
           | map(select(.key != "" and .key != "<synthetic>")) | from_entries),
         topSessions: ($week | group_by(.session)
           | map({ id: .[0].session, cost: (map(.cost) | add), tokens: (map(.tokens) | add) })
-          | sort_by(-.cost) | .[:5]) }' \
+          | sort_by(-.cost) | .[:5]),
+        # Cost by weekday (Monday first) and hour over 30 days: when Claude gets used.
+        heat: [range(1; 8) as $d | [range(0; 24) as $h
+          | $mon | map(select(.dow == $d and .hour == $h) | .cost) | add // 0]] }' \
   | { read -r usage
       # Title and project of each top session, from its transcript.
       top=$(printf '%s' "$usage" | jq -r '.topSessions[].id')
