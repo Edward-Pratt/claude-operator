@@ -1,0 +1,8 @@
+#!/bin/bash
+# Writes a release's version into the plugin's manifest, for update-server's release.sh:
+# `.github/bump-version 0.8.0`. The catalog copy takes its version from here.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+version=${1:?usage: bump-version X.Y.Z}
+sed -i "s/^version = \".*\"/version = \"$version\"/" claude-operator/plugin.toml
+grep -qx "version = \"$version\"" claude-operator/plugin.toml || { echo "bump-version: no version in plugin.toml" >&2; exit 1; }
