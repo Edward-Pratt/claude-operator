@@ -73,9 +73,10 @@ so the main display stays free. Wait for "Reloaded script" toasts to clear befor
 `main` is the development branch. A stable version is a `vX.Y.Z` tag, and the community catalog carries only
 tagged versions. The catalog copy lives on the `claude-operator` branch of a fork of community-plugins:
 
-1. Tag the release with update-server's `scripts/release.sh patch` (or `minor`, `major`). It sets `version` in
-   `claude-operator/plugin.toml` through `.github/bump-version`, commits, tags and pushes, and
-   `.github/workflows/release.yml` publishes the GitHub release.
+1. Tag the release with [herald](https://github.com/Edward-Pratt/herald)'s `herald release patch` (or `minor`,
+   `major`). It sets `version` in `claude-operator/plugin.toml` through `.github/bump-version` and opens a pull
+   request for it; once that's merged, the same command tags it, and `.github/workflows/release.yml` publishes the
+   GitHub release.
 2. Sync the fork with upstream.
 3. Copy the tag's `claude-operator/` over the branch's `claude-operator/` and push.
 
