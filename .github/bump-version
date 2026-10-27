@@ -1,5 +1,5 @@
 #!/bin/bash
-# Writes a release's version into the plugin's manifest, for update-server's release.sh:
+# Writes a release's version into the plugin's manifest, for `herald release`:
 # `.github/bump-version 0.8.0`. The catalog copy takes its version from here.
 set -euo pipefail
 cd "$(dirname "$0")/.."
