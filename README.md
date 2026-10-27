@@ -70,11 +70,14 @@ so the main display stays free. Wait for "Reloaded script" toasts to clear befor
 
 ### Publishing an update
 
-The catalog copy lives on the `claude-operator` branch of a fork of community-plugins:
+`main` is the development branch. A stable version is a `vX.Y.Z` tag, and the community catalog carries only
+tagged versions. The catalog copy lives on the `claude-operator` branch of a fork of community-plugins:
 
-1. Bump `version` in `claude-operator/plugin.toml` and commit here.
+1. Tag the release with update-server's `scripts/release.sh patch` (or `minor`, `major`). It sets `version` in
+   `claude-operator/plugin.toml` through `.github/bump-version`, commits, tags and pushes, and
+   `.github/workflows/release.yml` publishes the GitHub release.
 2. Sync the fork with upstream.
-3. Copy `claude-operator/` over the branch's `claude-operator/` and push.
+3. Copy the tag's `claude-operator/` over the branch's `claude-operator/` and push.
 
 ## License
 
