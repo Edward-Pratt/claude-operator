@@ -72,7 +72,10 @@ function M.clock(ms)
   if inner and inner ~= "" then fmt = inner end
   local secs = math.floor(ms / 1000)
   if ms - noctalia.nowMs() >= M.DAY_MS then fmt = "%a " .. fmt end
-  return os.date(fmt, secs)
+  -- The shell's format is chrono's; os.date rejects codes such as %T or %e.
+  local ok, s = pcall(os.date, fmt, secs)
+  if ok then return s end
+  return os.date(string.sub(fmt, 1, 3) == "%a " and "%a %H:%M" or "%H:%M", secs)
 end
 
 function M.tokens(n)
@@ -154,7 +157,8 @@ local function isSession(w) return w.kind == "session" end
 --            weekly one) | limit (at 100%)
 --   rate     percent per hour: the recent rate from the service's samples for the 5-hour
 --            window when it has them (`recent` = true), else the window's average so far
---   projected percent at reset; etaMs = time until 100% when that is before the reset
+--   projected percent at reset; etaMs = time until 100% when that is before the reset.
+--            "soon" from the API's severity alone may have no etaMs (and no projection).
 --   budget   percent per hour that would last exactly until the reset
 --   timeFrac share of the window's time already gone
 -- The API's own severity wins when it is worse.
@@ -223,9 +227,10 @@ function M.paceText(w, p)
   if p.status == "idle" then return "No active window", "starts with your next message" end
   if p.status == "limit" then return "Limit reached", resets end
   local budget = p.budget and `{resets} · budget {M.rateText(w, p.budget)}` or resets
-  if p.status == "hit" or p.status == "soon" then
+  if (p.status == "hit" or p.status == "soon") and p.etaMs then
     return `Limit in {M.span(p.etaMs)} at this rate ({M.clock(noctalia.nowMs() + p.etaMs)})`, budget
   end
+  if p.status == "soon" then return "Close to the limit", budget end
   if not p.projected then return "Too early to project", budget end
   local how = p.recent and `at the last {M.span(w.rateSpanMs or 0)}'s rate` or "at this rate"
   return `On course for ~{M.round(math.min(p.projected, 100))}% by reset {how}`, budget
@@ -236,7 +241,8 @@ function M.paceShort(w, p)
   p = p or M.pace(w)
   if p.status == "idle" then return "not started" end
   if p.status == "limit" then return w.resetsAt and `full · resets {M.clock(w.resetsAt)}` or "full" end
-  if p.status == "hit" or p.status == "soon" then return `full by {M.clock(noctalia.nowMs() + p.etaMs)}` end
+  if (p.status == "hit" or p.status == "soon") and p.etaMs then return `full by {M.clock(noctalia.nowMs() + p.etaMs)}` end
+  if p.status == "soon" then return "almost full" end
   if not p.projected then return `resets in {M.countdown(w.resetsAt)}` end
   return `~{M.round(math.min(p.projected, 100))}% by reset`
 end

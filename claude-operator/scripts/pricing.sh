@@ -9,7 +9,8 @@
 # Prices are USD per token; cache_write is the 5-minute cache rate, cache_write_1h the
 # 1-hour one. max is the context window in tokens. Model ids drop the
 # -YYYYMMDD snapshot suffix, the way transcripts name them. Either half that fails to
-# download keeps its previous value, so a network blip never empties the file.
+# download keeps its previous value, so a network blip never empties the file; `updated`
+# moves to today only when the prices downloaded, so a failed day is retried.
 # No token or account data is involved: both sources are public.
 set -u
 
@@ -34,8 +35,11 @@ models=$(curl -sSf --max-time 20 "$litellm" | jq -c '
                                   // .value.cache_creation_input_token_cost // 0),
                  max: (.value.max_input_tokens // null) } } ]
   | from_entries') || models=
-printf '%s' "$models" | jq -e 'type == "object" and length > 0' >/dev/null 2>&1 \
-  || models=$(printf '%s' "$old" | jq -c '.models // {}')
+updated=$(date +%F)
+if ! printf '%s' "$models" | jq -e 'type == "object" and length > 0' >/dev/null 2>&1; then
+  models=$(printf '%s' "$old" | jq -c '.models // {}')
+  updated=$(printf '%s' "$old" | jq -r '.updated // ""')
+fi
 
 rates=$(curl -sSf --max-time 10 "$rates_url?from=USD&to=EUR,GBP,JPY,CNY,CHF,AUD,CAD,INR" | jq -c '.rates') || rates=
 printf '%s' "$rates" | jq -e 'type == "object" and length > 0' >/dev/null 2>&1 \
@@ -43,8 +47,8 @@ printf '%s' "$rates" | jq -e 'type == "object" and length > 0' >/dev/null 2>&1 \
 
 # Newest per family: compare the numeric version parts ("opus-4-10" > "opus-4-9");
 # non-numeric ids such as "mythos-preview" sort first so a release always wins.
-jq -n --argjson models "$models" --argjson rates "$rates" --arg today "$(date +%F)" '
-  { updated: $today, models: $models, rates: $rates,
+jq -n --argjson models "$models" --argjson rates "$rates" --arg updated "$updated" '
+  { updated: (if $updated == "" then null else $updated end), models: $models, rates: $rates,
     families: ($models | keys
       | map({ id: ., family: split("-")[1],
               version: (split("-")[2:] | map(tonumber? // -1)) })

@@ -650,11 +650,12 @@ local function refreshIndex()
       noctalia.log("claude-operator: session index failed: " .. noctalia.string.trim(r.stderr or ""))
       return
     end
-    -- Published to every entry: ~190 KB for 490 sessions. The transcript path is left
-    -- out (the UI derives it from account, cwd and id), as is the size.
+    -- Published to every entry: ~190 KB for 490 sessions. The size is left out; the
+    -- path stays, since deleting by a path rebuilt from cwd misses long, non-ASCII and
+    -- empty-cwd project dirs.
     local kept = {}
     for _, x in ipairs(list) do
-      x.size, x.path = nil, nil
+      x.size = nil
       if #x.prompt > 160 then x.prompt = string.sub(x.prompt, 1, 160) .. "…" end
       -- Agent SDK runs (hooks, scripts) are not sessions anyone resumes.
       if not x.auto then kept[#kept + 1] = x end
