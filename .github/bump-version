@@ -4,5 +4,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 version=${1:?usage: bump-version X.Y.Z}
+current=$(sed -n 's/^version = "\(.*\)"/\1/p' claude-operator/plugin.toml)
+# Only X.Y.Z counts here: a release candidate of the current version isn't older than it.
+if [ "${version%%-*}" != "${current%%-*}" ] &&
+  [ "$(printf '%s\n%s\n' "${version%%-*}" "${current%%-*}" | sort -V | head -1)" = "${version%%-*}" ]; then
+  echo "bump-version: $version is older than the current version, $current" >&2
+  exit 1
+fi
 sed -i "s/^version = \".*\"/version = \"$version\"/" claude-operator/plugin.toml
 grep -qx "version = \"$version\"" claude-operator/plugin.toml || { echo "bump-version: no version in plugin.toml" >&2; exit 1; }
