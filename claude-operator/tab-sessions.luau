@@ -125,13 +125,14 @@ local function resume(ctx, s)
   ctx.close()
 end
 
-local function sessionRow(ctx, s, selected, isLive)
+-- hasMd: whether the project's CLAUDE.md exists, checked once per project, not per row.
+local function sessionRow(ctx, s, selected, isLive, hasMd)
   local meta = { os.date("%Y-%m-%d %H:%M", s.mtime // 1000), shared.ago(s.mtime) .. " ago" }
   if s.empty then meta[#meta + 1] = "empty" end
   if s.branch ~= "" then meta[#meta + 1] = s.branch end
   if s.model ~= "" then meta[#meta + 1] = s.model end
   if s.context > 0 then meta[#meta + 1] = shared.tokens(s.context) .. " context" end
-  if shared.multiAccount() then meta[#meta + 1] = shared.accountLabel(s.account) end
+  if shared.multiAccount(ctx.S.accounts) then meta[#meta + 1] = shared.accountLabel(ctx.S.accounts, s.account) end
 
   local md = s.cwd .. "/CLAUDE.md"
   local buttons = kit.compact(
@@ -140,7 +141,7 @@ local function sessionRow(ctx, s, selected, isLive)
     ui.button({ text = s.label, variant = "ghost", contentAlign = "start", flexGrow = 1, controlSize = "sm",
       selected = selected, tooltip = s.empty and "Empty session: nothing to resume" or "Resume in a terminal",
       onClick = function() resume(ctx, s) end }),
-    string.sub(s.cwd, 1, 1) == "/" and kit.iconButton("brain", noctalia.fileExists(md) and "Open CLAUDE.md" or "Create CLAUDE.md",
+    string.sub(s.cwd, 1, 1) == "/" and kit.iconButton("brain", hasMd and "Open CLAUDE.md" or "Create CLAUDE.md",
       function() shared.openInEditor(md) end) or nil,
     kit.iconButton(preview == s.id and "eye-off" or "eye", "Preview", function()
       preview = preview ~= s.id and s.id or nil
@@ -269,8 +270,9 @@ function M.render(ctx)
       local sel = M.nav:add("grp-" .. g.cwd, function() expanded[g.cwd] = not expanded[g.cwd]; ctx.render() end)
       rows[#rows + 1] = groupHeader(ctx, g, #e.matches, sel, hasLive, pins[g.cwd] == true, open)
       if open then
+        local hasMd = noctalia.fileExists(g.cwd .. "/CLAUDE.md")
         for _, s in ipairs(e.matches) do
-          rows[#rows + 1] = sessionRow(ctx, s, M.nav:add("sess-" .. s.id, function() resume(ctx, s) end), running[s.id] == true)
+          rows[#rows + 1] = sessionRow(ctx, s, M.nav:add("sess-" .. s.id, function() resume(ctx, s) end), running[s.id] == true, hasMd)
         end
       end
     end

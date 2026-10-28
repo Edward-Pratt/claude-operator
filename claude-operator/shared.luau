@@ -256,12 +256,12 @@ end
 
 -- ── Accounts ────────────────────────────────────────────────────────────────
 
-function M.accounts() return noctalia.state.get("accounts") or {} end
+-- Callers pass the accounts list they already hold (ctx.S.accounts, the launcher's copy):
+-- a state.get copies the whole list, limit samples included, so never fetch it per row.
+function M.multiAccount(accounts) return #accounts > 1 end
 
-function M.multiAccount() return #M.accounts() > 1 end
-
-function M.accountLabel(dir)
-  for _, a in ipairs(M.accounts()) do if a.dir == dir then return a.label end end
+function M.accountLabel(accounts, dir)
+  for _, a in ipairs(accounts) do if a.dir == dir then return a.label end end
   return dir and (string.match(dir, "([^/]+)$") or dir) or "default"
 end
 
