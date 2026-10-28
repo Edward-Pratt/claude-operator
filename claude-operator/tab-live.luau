@@ -259,7 +259,7 @@ local function recentCard(ctx, r, key)
   table.insert(actions, 1, cardAction("player-play", "Resume", resume))
   body[#body + 1] = whereRow(r.cwd, nil, actionsRow(ctx, key, actions))
   if r.title ~= "" and r.prompt ~= "" then body[#body + 1] = kit.iconLine("message-circle", r.prompt) end
-  if shared.multiAccount() then body[#body + 1] = ui.row({ gap = 4 }, { kit.chip("user-circle", shared.accountLabel(r.account)) }) end
+  if shared.multiAccount(ctx.S.accounts) then body[#body + 1] = ui.row({ gap = 4 }, { kit.chip("user-circle", shared.accountLabel(ctx.S.accounts, r.account)) }) end
   return cardShell(ctx, key, "recent", body, resume)
 end
 
