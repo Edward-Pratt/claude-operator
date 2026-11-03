@@ -127,6 +127,18 @@ label_key = "settings.terminal.label"
 description_key = "settings.terminal.description"
 default = ""
 
+# Only for kitty remote control: every other terminal already opens a new window.
+[[setting]]
+key = "open_in"
+type = "select"
+label_key = "settings.open_in.label"
+description_key = "settings.open_in.description"
+default = "tab"
+options = [
+  { value = "tab", label_key = "settings.open_in.options.tab" },
+  { value = "window", label_key = "settings.open_in.options.window" },
+]
+
 # Empty: try code, then zed.
 [[setting]]
 key = "editor_command"
