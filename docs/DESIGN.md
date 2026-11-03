@@ -15,13 +15,17 @@ claude-operator/            repo root, added to noctalia as a `path` plugin sour
   claude-operator/          the plugin (dir name = id suffix, community layout)
     plugin.toml
     service.luau            the only entry that reads Claude data or polls
+    service-*.luau          the service's modules: core (shared state, helpers), accounts, limits,
+                            usage, remote, sessions, index
     widget.luau             bar widget, renders state only
     desktop.luau            desktop widget, renders state only
     gauge.luau              lamp board and nested ring gauge, shared by both widgets
     panel.luau              panel shell: header, tabs, keys; one module per tab
     tab-*.luau              panel tabs: live, usage, sessions, claudemd ("Memory"), plugins
+    live-cards.luau         the Live tab's cards and the hover and selection state behind them
     kit.luau                ui building blocks and the keyboard selection model
     plugins.luau            `claude plugin` wrapper for the Plugins tab
+    plugins-cli.luau        running `claude plugin`; plugins-links.luau: project links and versions
     launcher.luau           /co launcher provider
     shared.luau             formatting, pace model, currency, actions
     scripts/                shell helpers the service and panel run
