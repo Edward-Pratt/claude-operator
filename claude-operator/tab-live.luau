@@ -80,7 +80,7 @@ local function picker(ctx)
       key = key, gap = 8, align = "center", paddingH = 8, paddingV = 6, radius = 8,
       fill = cards.hovering(key) and "on_surface/0.10" or "on_surface/0.04",
       onHover = cards.hoverHandler(ctx, key),
-      onClick = function() actions.launch(d, actions.claudeArgv(nil)); ctx.close() end,
+      onClick = function() actions.newSession(d); ctx.close() end,
     }, {
       ui.glyph({ name = pinnedDir[d] and "pinned" or "folder-plus", size = 14, color = "primary" }),
       ui.label({ text = shared.projectPath(d), fontSize = 12, maxLines = 1, flexGrow = 1 }),

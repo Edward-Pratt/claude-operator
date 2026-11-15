@@ -81,6 +81,21 @@ function M.launch(dir, argv)
   if not noctalia.runAsync(cmd, function(r) if r.exitCode ~= 0 then fallback() end end, 15000) then fallback() end
 end
 
+-- Starts claude in dir under the default account: in the Claude desktop app's Code tab
+-- when new_session_in is "desktop", else the way launch opens it. When nothing handles
+-- claude:// links, the session opens in the terminal and a notice says why.
+function M.newSession(dir)
+  local function inTerminalInstead() M.launch(dir, M.claudeArgv(nil)) end
+  if noctalia.getConfig("new_session_in") ~= "desktop" then return inTerminalInstead() end
+  local url = "claude://code/new?folder=" .. noctalia.string.urlEncode(dir)
+  local function onDone(r)
+    if r.exitCode == 0 then return end
+    noctalia.notify("Claude Operator", "Nothing handles claude:// links (is the Claude desktop app installed?), so the session opened in a terminal.")
+    inTerminalInstead()
+  end
+  if not noctalia.runAsync({ "bash", SCRIPTS .. "/open-desktop.sh", url }, onDone, 15000) then inTerminalInstead() end
+end
+
 function M.resume(account, cwd, sid) M.launch(cwd, M.claudeArgv(account, "--resume", sid)) end
 
 function M.resumeCommand(account, cwd, sid)
