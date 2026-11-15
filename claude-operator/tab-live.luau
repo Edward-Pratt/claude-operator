@@ -5,6 +5,7 @@
 -- The cards themselves, and the hover and selection state behind them, are in
 -- live-cards.luau; this file lays out the board around them.
 local shared = require("./shared.luau")
+local actions = require("./actions.luau")
 local kit = require("./kit.luau")
 local cards = require("./live-cards.luau")
 local M = {}
@@ -79,7 +80,7 @@ local function picker(ctx)
       key = key, gap = 8, align = "center", paddingH = 8, paddingV = 6, radius = 8,
       fill = cards.hovering(key) and "on_surface/0.10" or "on_surface/0.04",
       onHover = cards.hoverHandler(ctx, key),
-      onClick = function() shared.launch(d, shared.claudeArgv(nil)); ctx.close() end,
+      onClick = function() actions.newSession(d); ctx.close() end,
     }, {
       ui.glyph({ name = pinnedDir[d] and "pinned" or "folder-plus", size = 14, color = "primary" }),
       ui.label({ text = shared.projectPath(d), fontSize = 12, maxLines = 1, flexGrow = 1 }),
@@ -113,7 +114,7 @@ function M.render(ctx)
       content[#content + 1] = sectionHeader(g.title, #by[g.status], g.color)
       for _, s in ipairs(by[g.status]) do
         local key = "live:" .. s.pid
-        M.nav:add(key, function() shared.focus(s); ctx.close() end)
+        M.nav:add(key, function() actions.focus(s); ctx.close() end)
         lineNo += 1
         content[#content + 1] = cards.liveCard(ctx, s, key, `L{lineNo}`)
       end
@@ -123,7 +124,7 @@ function M.render(ctx)
     content[#content + 1] = sectionHeader("Elsewhere", #S.elsewhere, "secondary", nil, "world")
     for _, r in ipairs(S.elsewhere) do
       local key = "remote:" .. r.id
-      M.nav:add(key, function() shared.open(r.url); ctx.close() end)
+      M.nav:add(key, function() actions.open(r.url); ctx.close() end)
       content[#content + 1] = cards.remoteCard(ctx, r, key)
     end
   end
@@ -136,7 +137,7 @@ function M.render(ctx)
     if showRecent then
       for _, r in ipairs(S.recent) do
         local key = "recent:" .. r.sessionId
-        M.nav:add(key, function() shared.resume(r.account, r.cwd, r.sessionId); ctx.close() end)
+        M.nav:add(key, function() actions.resume(r.account, r.cwd, r.sessionId); ctx.close() end)
         content[#content + 1] = cards.recentCard(ctx, r, key)
       end
     end

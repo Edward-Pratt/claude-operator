@@ -14,6 +14,7 @@
 -- web, and the newest version its clone offers, is plugins-links.luau.
 
 local shared = require("./shared.luau")
+local actions = require("./actions.luau")
 local cli = require("./plugins-cli.luau")
 local links = require("./plugins-links.luau")
 local isName, trim, outcomeMessage, logFailure = cli.isName, cli.trim, cli.outcomeMessage, cli.logFailure
@@ -32,7 +33,7 @@ function M.openUrl(url)
 end
 
 function M.available()
-    return shared.claudeBin() ~= nil
+    return actions.claudeBin() ~= nil
 end
 
 -- Classifies what the user typed in the install box:
