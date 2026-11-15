@@ -5,6 +5,7 @@
 -- keyboard selection (`nav`), the open reply previews and the armed stop button.
 -- Card design from claude-sessions (lfdominguez, MIT).
 local shared = require("./shared.luau")
+local actions = require("./actions.luau")
 local kit = require("./kit.luau")
 local M = {}
 M.nav = kit.nav()
@@ -142,13 +143,13 @@ end
 -- the dir it started in); the encoded cwd is only a fallback.
 local function commonActions(ctx, account, cwd, sid, transcript)
   return {
-    cardAction("terminal-2", "Open a shell here", function() shared.launch(cwd); ctx.close() end),
-    cardAction("folder-open", "Open in file manager", function() shared.open(cwd); ctx.close() end),
+    cardAction("terminal-2", "Open a shell here", function() actions.launch(cwd); ctx.close() end),
+    cardAction("folder-open", "Open in file manager", function() actions.open(cwd); ctx.close() end),
     cardAction("copy", "Copy resume command", function()
-      noctalia.copyToClipboard(shared.resumeCommand(account, cwd, sid), "text/plain")
-      noctalia.notify("Copied", shared.resumeCommand(account, cwd, sid))
+      noctalia.copyToClipboard(actions.resumeCommand(account, cwd, sid), "text/plain")
+      noctalia.notify("Copied", actions.resumeCommand(account, cwd, sid))
     end),
-    cardAction("file-text", "Open transcript", function() shared.open(transcript or shared.transcript(account, cwd, sid)); ctx.close() end),
+    cardAction("file-text", "Open transcript", function() actions.open(transcript or shared.transcript(account, cwd, sid)); ctx.close() end),
   }
 end
 
@@ -205,7 +206,7 @@ function M.liveCard(ctx, s, key, line)
   local actions = commonActions(ctx, s.account, s.cwd, s.sessionId, s.transcript)
   if s.remote then
     table.insert(actions, 1, cardAction("external-link", "Open on claude.ai (Remote Control)", function()
-      shared.open(s.remote); ctx.close()
+      actions.open(s.remote); ctx.close()
     end))
   end
   local armed = armedKill == s.pid and noctalia.nowMs() - armedAt < 3000
@@ -220,12 +221,12 @@ function M.liveCard(ctx, s, key, line)
   end, { text = armed and "Stop?" or nil, variant = armed and "destructive" or "ghost" })
 
   table.insert(body, 2, whereRow(s.cwd, d.branch, actionsRow(ctx, key, actions)))
-  return cardShell(ctx, key, s.status, body, function() shared.focus(s); ctx.close() end)
+  return cardShell(ctx, key, s.status, body, function() actions.focus(s); ctx.close() end)
 end
 
 function M.remoteCard(ctx, r, key)
   local waiting = r.category == "need_input"
-  local function open() shared.open(r.url); ctx.close() end
+  local function open() actions.open(r.url); ctx.close() end
   local body = {
     titleRow(ctx, key, nil, r.title, r.since > 0 and shared.ago(r.since) or "", waiting and "error" or "secondary", false),
     ui.row({ gap = 5, align = "center" }, {
@@ -255,7 +256,7 @@ function M.remoteCard(ctx, r, key)
 end
 
 function M.recentCard(ctx, r, key)
-  local function resume() shared.resume(r.account, r.cwd, r.sessionId); ctx.close() end
+  local function resume() actions.resume(r.account, r.cwd, r.sessionId); ctx.close() end
   local body = {
     titleRow(ctx, key, nil, r.title ~= "" and r.title or r.prompt, shared.ago(r.mtime), "on_surface_variant", false),
   }

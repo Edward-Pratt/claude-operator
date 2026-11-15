@@ -27,7 +27,8 @@ claude-operator/            repo root, added to noctalia as a `path` plugin sour
     plugins.luau            `claude plugin` wrapper for the Plugins tab
     plugins-cli.luau        running `claude plugin`; plugins-links.luau: project links and versions
     launcher.luau           /co launcher provider
-    shared.luau             formatting, pace model, currency, actions
+    shared.luau             paths, formatting, pace model, currency, accounts
+    actions.luau            focus, open, launch and resume a session, open in an editor
     scripts/                shell helpers the service and panel run
     translations/en.json
 ```

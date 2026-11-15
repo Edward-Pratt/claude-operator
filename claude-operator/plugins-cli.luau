@@ -4,6 +4,7 @@
 -- record out of an argv list. Ported from claude-cockpit's skills.luau (nightwatch75, MIT).
 
 local shared = require("./shared.luau")
+local actions = require("./actions.luau")
 local M = {}
 
 -- Install/update fetch over git; the host caps a command at 60s anyway.
@@ -49,7 +50,7 @@ end
 -- was started from (a login tty, when launched from a console), and claude waits for
 -- input there until it closes, so every listing would hang until the timeout.
 function M.cliArgv(args)
-    local argv = { "bash", "-c", 'exec "$@" </dev/null', "bash", shared.claudeBin() or "claude", "plugin" }
+    local argv = { "bash", "-c", 'exec "$@" </dev/null', "bash", actions.claudeBin() or "claude", "plugin" }
     for _, a in ipairs(args) do
         table.insert(argv, a)
     end
