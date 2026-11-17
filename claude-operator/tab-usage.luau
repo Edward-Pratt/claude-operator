@@ -187,8 +187,8 @@ local function heatImage(u)
   end
   local max = 0
   for _, row in ipairs(u.heat) do for _, v in ipairs(row) do max = math.max(max, v) end end
-  local fill = noctalia.getColor("primary") or "#33b1ff"
-  local empty = noctalia.getColor("on_surface") or "#ffffff"
+  local fill = noctalia.getColor("primary") or "#4fd8ba"
+  local empty = noctalia.getColor("on_surface") or "#eef2f0"
   local svg = { string.format('<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d">', 24 * CELL_W, 7 * CELL_H) }
   for d, row in ipairs(u.heat) do
     for h, v in ipairs(row) do
