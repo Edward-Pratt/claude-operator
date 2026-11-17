@@ -35,7 +35,7 @@ end
 
 local function hex(role)
   local c = noctalia.getColor(string.match(role, "^[^/]+"))
-  return c and string.gsub(c, "#", "") or "888888"
+  return c and string.gsub(c, "#", "") or "a6afbc"
 end
 
 -- windows: { { percent, projected, role } }, innermost first. Returns an image path.
