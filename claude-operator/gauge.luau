@@ -33,9 +33,15 @@ function M.lamps(sessions, size, blinkOff, max)
   return ui.row({ gap = 3, align = "center", paddingH = 4, paddingV = 3, radius = 4, fill = "on_surface/0.06" }, lamps)
 end
 
+-- Used only when the shell gives no colour for a role: Armil's dark value for each role
+-- the gauge asks for, without "#" (the SVG writes stroke="#%s"). Any other role gets
+-- on_surface's.
+local FALLBACK = { on_surface = "eef2f0", primary = "4fd8ba", tertiary = "f0b84a", error = "ff6b72" }
+
 local function hex(role)
-  local c = noctalia.getColor(string.match(role, "^[^/]+"))
-  return c and string.gsub(c, "#", "") or "a6afbc"
+  local name = string.match(role, "^[^/]+")
+  local c = noctalia.getColor(name)
+  return c and string.gsub(c, "#", "") or FALLBACK[name] or FALLBACK.on_surface
 end
 
 -- windows: { { percent, projected, role } }, innermost first. Returns an image path.
