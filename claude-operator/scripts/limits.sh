@@ -4,14 +4,24 @@
 # using Claude Code's own OAuth token, read-only. The token is passed to curl on stdin,
 # so it never appears in the process list, and it is never printed or handed to Luau.
 # It is never refreshed either: Claude Code owns it. Exit 2 = no token, 3 = expired
-# (Claude Code refreshes it on its next start), 4 = rate limited (stdout: the seconds
+# (Claude Code refreshes it on its next start, unless its sign-in itself has ended:
+# then only /login helps, and stderr says so), 4 = rate limited (stdout: the seconds
 # the server asked to wait, if it said), anything else = request failed.
 # Derived from claude-sessions' limits.sh (lfdominguez, MIT).
 creds="${1:-$HOME/.claude}/.credentials.json"
+now=$(($(date +%s) * 1000))
+# The Claude desktop app keeps its own sign-in and never writes this file, so a CLI
+# sign-in that ran out (Claude Code then blanks the tokens and sets loginEnded) stays
+# dead until /login, however long the desktop app is used. A `claude setup-token`
+# token is no substitute: api/oauth/usage answers it with 403.
+ended=$(jq -r --argjson now "$now" '.claudeAiOauth // empty
+  | select(.loginEnded or ((.refreshTokenExpiresAt // 0) > 0 and .refreshTokenExpiresAt <= $now))
+  | "yes"' "$creds" 2>/dev/null)
+[ -z "$ended" ] || { echo "Claude Code sign-in ended: run claude, then /login" >&2; exit 3; }
 token=$(jq -r '.claudeAiOauth.accessToken // empty' "$creds" 2>/dev/null)
 [ -n "$token" ] || { echo "no Claude Code OAuth token in $creds" >&2; exit 2; }
 expires=$(jq -r '.claudeAiOauth.expiresAt // 0' "$creds")
-[ "$expires" -gt "$(($(date +%s) * 1000))" ] || { echo "OAuth token expired" >&2; exit 3; }
+[ "$expires" -gt "$now" ] || { echo "OAuth token expired" >&2; exit 3; }
 plan=$(jq -c '{ subscription: (.claudeAiOauth.subscriptionType // null), tier: (.claudeAiOauth.rateLimitTier // null) }' "$creds")
 tmp=$(mktemp -d) && trap 'rm -rf "$tmp"' EXIT
 code=$(printf 'header = "Authorization: Bearer %s"\n' "$token" \

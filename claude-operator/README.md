@@ -231,6 +231,9 @@ The OAuth token is only read, never refreshed or written: Claude Code owns it. I
 passed to `curl` on stdin, so it never appears in the process list, and it never
 reaches the plugin's Luau code or the log. While it is expired (Claude Code refreshes
 it on its next start), the last known limits stay visible, dimmed, with their age.
+The token is the one the `claude` CLI keeps in `~/.claude/.credentials.json`. The Claude
+desktop app signs in on its own and never writes that file, so using only the desktop
+app does not keep it fresh.
 
 ### Files written
 
@@ -259,6 +262,9 @@ users a measure of value rather than a bill.
   that kitty. Add the two lines above and restart kitty.
 - **Limits are dimmed with "OAuth token expired"**: start Claude Code once; it refreshes
   the token and the next refresh picks it up.
+- **Limits are dimmed with "Claude Code sign-in ended"**: the CLI's sign-in ran out, which
+  happens when you only use the desktop app for a while. Run `claude`, then `/login`.
+  A `claude setup-token` token does not help: the usage endpoint refuses it (HTTP 403).
 - **"rate limited by Anthropic, next try …"**: the usage endpoint allows few calls per
   token, shared with anything else that polls it (Claude Code statusline tools, other
   usage plugins). The plugin waits as long as the server asks, or backs off from 10
