@@ -14,18 +14,19 @@ covers its features, requirements, settings, what it reads and what it sends ove
 
 ## Install
 
-Claude Operator is submitted to the community catalog in
-[noctalia-dev/community-plugins#1176](https://github.com/noctalia-dev/community-plugins/pull/1176).
-Once that merges, enable it from the `community` source in noctalia's Plugins settings.
+Claude Operator is in noctalia's community catalog. Enable `edward/claude-operator` from the
+`community` source in noctalia's Plugins settings, then add the widget to your bar. The
+catalog carries tagged releases only.
 
-Until then, install it from this repository as a `path` source:
+To run `main` instead, or to work on the plugin, install it from this repository as a
+`path` source:
 
 ```sh
 git clone https://github.com/Edward-Pratt/claude-operator ~/src/claude-operator
 ```
 
 Add the source to `~/.local/state/noctalia/settings.toml`, then enable
-`edward/claude-operator` in the Plugins settings and add the widget to your bar:
+`edward/claude-operator` from it in the Plugins settings:
 
 ```toml
 [[plugins.source]]
